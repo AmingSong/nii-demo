@@ -57,33 +57,32 @@ window.addEventListener('load', async () => {
   nv.attachTo('gl');
 
   const base = "./case_00003/";
-  const files = [
-    {
-      url: base + "imaging_float32_lowres.nii",
-      name: "Image",
-      colormap: "gray",   // note: lowercase
-      opacity: 1.0
-    },
-    {
-      url: base + "segmentation_aligned_lowres.nii",
-      name: "GT",
-      colormap: "red",    // lowercase
-      opacity: 0.6
-    },
-    {
-      url: base + "case_00003_aligned_lowres.nii",
-      name: "Pred",
-      colormap: "green",  // lowercase
-      opacity: 0.6
-    }
-  ];
 
-  try {
-    await nv.loadVolumes(files);
-    console.log("All volumes loaded.");
-  } catch (e) {
-    console.error("Volume loading failed:", e);
-  }
+  // First load base image
+  await nv.addVolumeFromUrl({
+    url: base + "imaging_float32_lowres.nii",
+    name: "Image",
+    colormap: "gray",
+    opacity: 1.0
+  });
+
+  // Then add GT mask
+  await nv.addVolumeFromUrl({
+    url: base + "segmentation_aligned_lowres.nii",
+    name: "GT",
+    colormap: "red",
+    opacity: 0.6
+  });
+
+  // Then add prediction mask
+  await nv.addVolumeFromUrl({
+    url: base + "case_00003_aligned_lowres.nii",
+    name: "Pred",
+    colormap: "green",
+    opacity: 0.6
+  });
+
+  console.log("All volumes loaded.");
 
   const gtCB   = document.getElementById('showGT');
   const predCB = document.getElementById('showPred');
