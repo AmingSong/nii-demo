@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NiiVue Viewer – GitHub Pages Version</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: black;
+      overflow: hidden;
+    }
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+  </style>
+
+  <!-- Load local NiiVue -->
+  <script src="./js/niivue.umd.js"></script>
+</head>
+<body>
+  <canvas id="gl"></canvas>
+
+  <script>
+    window.addEventListener('load', async () => {
+      const NiiVueClass = window.Niivue || (window.niivue ? window.niivue.Niivue : undefined);
+      if (typeof NiiVueClass === 'undefined') {
+        console.error("NiiVue failed to load. window.niivue is", window.niivue);
+        return;
+      }
+
+      const nv = new NiiVueClass({
+        show3Dcrosshair: true,
+        isWebGL2: true,
+        dragAndDropEnabled: true,
+        logging: true
+      });
+
+      nv.attachTo('gl');
+
+      const volumeList = [
+        {
+          url: "https://raw.githubusercontent.com/AmingSong/nii-demo/main/case_00003/imaging_small.nii.gz",
+          colormap: "gray",
+          opacity: 1.0,
+          visible: true
+        },
+        {
+          url: "https://raw.githubusercontent.com/AmingSong/nii-demo/main/case_00003/segmentation.nii.gz",
+          colormap: "red",
+          opacity: 0.5,
+          visible: true
+        },
+        {
+          url: "https://raw.githubusercontent.com/AmingSong/nii-demo/main/case_00003/case_00003.nii.gz",
+          colormap: "green",
+          opacity: 0.5,
+          visible: true
+        }
+      ];
+
+      try {
+        console.log("NIIVUE VERSION ", nv.version);
+        await nv.loadVolumes(volumeList);
+        console.log("Volumes loaded successfully");
+      } catch (err) {
+        console.error("Error loading volumes:", err);
+      }
+    });
+  </script>
+</body>
+</html>
