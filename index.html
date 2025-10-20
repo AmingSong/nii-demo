@@ -45,59 +45,32 @@
     window.addEventListener('load', async () => {
       const NiiVueClass =
         window.Niivue ||
-        (window.niivue && window.niivue.Niivue) ||
-        (window.nv && window.nv.Niivue);
+        (window.niivue && window.niivue.Niivue);
 
       if (!NiiVueClass) {
-        console.error("Cannot find Niivue in window scope. Check ./js/niivue.umd.js.");
+        console.error("Niivue not found in window scope.");
         return;
       }
 
       const nv = new NiiVueClass({
         show3Dcrosshair: true,
         isWebGL2: true,
-        dragAndDropEnabled: false,
         logging: true,
       });
       nv.attachTo('gl');
 
+      // These are direct URLs relative to index.html
       const base = "./case_00003/";
       const files = [
-        { name: "Image", file: "imaging_float32_lowres.nii",     colormap: "gray",  opacity: 1.0 },
-        { name: "GT",    file: "segmentation_aligned_lowres.nii", colormap: "red",   opacity: 0.6 },
-        { name: "Pred",  file: "case_00003_aligned_lowres.nii",   colormap: "green", opacity: 0.6 }
+        { url: base + "imaging_float32_lowres.nii",     name: "Image", colormap: "gray",  opacity: 1.0 },
+        { url: base + "segmentation_aligned_lowres.nii", name: "GT",    colormap: "red",   opacity: 0.6 },
+        { url: base + "case_00003_aligned_lowres.nii",   name: "Pred",  colormap: "green", opacity: 0.6 }
       ];
 
-      for (const f of files) {
-        try {
-          console.log("Fetching", f.file);
-          const res = await fetch(base + f.file);
-          if (!res.ok) throw new Error("HTTP " + res.status);
-          const buf = await res.arrayBuffer();
+      // Load volumes using the URL-based API (works in Niivue 0.36.0)
+      await nv.loadVolumes(files);
 
-          if (nv.addVolumeFromArrayBuffer) {
-            await nv.addVolumeFromArrayBuffer(buf, {
-              name: f.name,
-              colormap: f.colormap,
-              opacity: f.opacity,
-            });
-          } else if (NiiVueClass.NVImage) {
-            const img = new NiiVueClass.NVImage();
-            await img.loadFromArrayBuffer(buf);
-            img.name = f.name;
-            img.colormap = f.colormap;
-            img.opacity = f.opacity;
-            nv.addVolume(img);
-          } else {
-            throw new Error("No valid loading method in this Niivue build.");
-          }
-
-          console.log("Loaded", f.file);
-        } catch (e) {
-          console.error("Failed to load", f.file, e);
-        }
-      }
-
+      // UI
       const gtCB   = document.getElementById('showGT');
       const predCB = document.getElementById('showPred');
       const opSL   = document.getElementById('opacity');
@@ -116,5 +89,6 @@
       applyUI();
     });
   </script>
+
 </body>
 </html>
