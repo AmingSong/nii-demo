@@ -67,7 +67,14 @@
       ];
 
       try {
-        await nv.loadVolumes(volumes);
+        for (const v of volumes) {
+          try {
+            console.log("Loading", v.name, "from", v.url);
+            await nv.loadVolumes([v]);
+          } catch (err) {
+            console.error("Failed to load", v.name, err);
+          }
+        }
         console.log("Volumes loaded successfully");
       } catch (err) {
         console.error("Error loading volumes:", err);
