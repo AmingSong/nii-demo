@@ -58,17 +58,17 @@
 
       // === Volume definitions ===
       const volumes = [
-        { id: 'bg', url: './case_00003/imaging_float32.nii.gz', colormap: 'gray', opacity: 1.0, visible: true },
+        { id: 'bg', url: './case_00003/imaging_float32_lowres.nii', colormap: 'gray', opacity: 1.0, visible: true },
 
         // GT (1/2/3 -> kidney/tumor/cyst)
-        { id: 'gt_kidney', url: './case_00003/case_00003_aligned.nii', colormap: 'red', opacity: 0.5, visible: true, frame4D: 0 },
-        { id: 'gt_tumor', url: './case_00003/case_00003_aligned.nii', colormap: 'purple', opacity: 0.5, visible: true, frame4D: 1 },
-        { id: 'gt_cyst', url: './case_00003/case_00003_aligned.nii', colormap: 'orange', opacity: 0.5, visible: true, frame4D: 2 },
+        { id: 'gt_kidney', url: './case_00003/case_00003_aligned_lowres.nii', colormap: 'red', opacity: 0.5, visible: true, frame4D: 0 },
+        { id: 'gt_tumor', url: './case_00003/case_00003_aligned_lowres.nii', colormap: 'purple', opacity: 0.5, visible: true, frame4D: 1 },
+        { id: 'gt_cyst', url: './case_00003/case_00003_aligned_lowres.nii', colormap: 'orange', opacity: 0.5, visible: true, frame4D: 2 },
 
         // Prediction (1/2/3 -> kidney/tumor/cyst)
-        { id: 'pred_kidney', url: './case_00003/segmentation_aligned.nii', colormap: 'green', opacity: 0.5, visible: false, frame4D: 0 },
-        { id: 'pred_tumor', url: './case_00003/segmentation_aligned.nii', colormap: 'blue', opacity: 0.5, visible: false, frame4D: 1 },
-        { id: 'pred_cyst', url: './case_00003/segmentation_aligned.nii', colormap: 'yellow', opacity: 0.5, visible: false, frame4D: 2 },
+        { id: 'pred_kidney', url: './case_00003/segmentation_aligned_lowres.nii', colormap: 'green', opacity: 0.5, visible: false, frame4D: 0 },
+        { id: 'pred_tumor', url: './case_00003/segmentation_aligned_lowres.nii', colormap: 'blue', opacity: 0.5, visible: false, frame4D: 1 },
+        { id: 'pred_cyst', url: './case_00003/segmentation_aligned_lowres.nii', colormap: 'yellow', opacity: 0.5, visible: false, frame4D: 2 },
       ];
 
       await nv.loadVolumes(volumes);
