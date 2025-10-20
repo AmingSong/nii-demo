@@ -2,9 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NiiVue – GT vs Prediction Viewer</title>
+  <title>NiiVue – Class-wise Control (Fixed)</title>
   <style>
     html, body {
       margin: 0;
@@ -12,95 +11,129 @@
       background: black;
       overflow: hidden;
     }
-    canvas {
-      width: 100%;
-      height: 100%;
-      display: block;
-    }
-    #controls {
+    #toolbar {
       position: absolute;
       top: 10px;
       left: 10px;
-      background: rgba(0, 0, 0, 0.6);
-      color: white;
+      background: rgba(0,0,0,0.7);
       padding: 10px;
-      border-radius: 8px;
+      border-radius: 10px;
+      color: white;
       font-family: sans-serif;
+      z-index: 10;
     }
-    #controls label { display: block; margin: 5px 0; }
-    input[type="range"] { width: 100px; }
+    label { display: block; margin: 3px 0; cursor: pointer; }
+    canvas { width: 100%; height: 100%; display: block; }
   </style>
   <script src="./js/niivue.umd.js"></script>
 </head>
 
 <body>
-  <canvas id="gl"></canvas>
+  <div id="toolbar">
+    <strong>Background</strong>
+    <label><input type="checkbox" id="showBG" checked> Show Base Image</label>
 
-  <div id="controls">
-    <strong>Layers</strong><br>
-    <label><input type="checkbox" id="chk-bg" checked> Background</label>
-    <label><input type="checkbox" id="chk-gt" checked> Ground Truth</label>
-    <label><input type="checkbox" id="chk-pred"> Prediction</label>
-    <br>
-    <label>Opacity: <input type="range" id="opacity" min="0" max="1" step="0.05" value="0.5"></label>
+    <hr>
+    <strong>Ground Truth</strong>
+    <label><input type="checkbox" id="gt1" checked> Kidney (1)</label>
+    <label><input type="checkbox" id="gt2" checked> Tumor (2)</label>
+    <label><input type="checkbox" id="gt3" disabled> Cyst (3) – Not present</label>
+
+    <hr>
+    <strong>Prediction</strong>
+    <label><input type="checkbox" id="pr1" checked> Kidney (1)</label>
+    <label><input type="checkbox" id="pr2" checked> Tumor (2)</label>
+    <label><input type="checkbox" id="pr3" disabled> Cyst (3) – Not present</label>
   </div>
+
+  <canvas id="gl"></canvas>
 
   <script>
     window.addEventListener('load', async () => {
       const NiiVueClass = window.Niivue || (window.niivue ? window.niivue.Niivue : undefined);
-      if (!NiiVueClass) {
-        console.error("❌ NiiVue failed to load");
-        return;
-      }
+      if (!NiiVueClass) { console.error("❌ NiiVue failed to load."); return; }
 
-      const nv = new NiiVueClass({ show3Dcrosshair: true, isWebGL2: true });
+      const nv = new NiiVueClass({
+        show3Dcrosshair: true,
+        isWebGL2: true
+      });
       nv.attachTo('gl');
 
-      // === Volume definitions ===
-      const volumes = [
-        { id: 'bg', url: './case_00003/imaging_float32_lowres.nii', colormap: 'gray', opacity: 1.0, visible: true },
+      const volumes = [];
 
-        // GT (1/2/3 -> kidney/tumor/cyst)
-        { id: 'gt_kidney', url: './case_00003/case_00003_aligned_lowres.nii', colormap: 'red', opacity: 0.5, visible: true, frame4D: 0 },
-        { id: 'gt_tumor', url: './case_00003/case_00003_aligned_lowres.nii', colormap: 'purple', opacity: 0.5, visible: true, frame4D: 1 },
-        { id: 'gt_cyst', url: './case_00003/case_00003_aligned_lowres.nii', colormap: 'orange', opacity: 0.5, visible: true, frame4D: 2 },
+      // === 灰度背景 ===
+      volumes.push({
+        name: "Background",
+        url: "./case_00003/imaging_float32_lowres.nii",
+        colormap: "gray",
+        opacity: 1.0
+      });
 
-        // Prediction (1/2/3 -> kidney/tumor/cyst)
-        { id: 'pred_kidney', url: './case_00003/segmentation_aligned_lowres.nii', colormap: 'green', opacity: 0.5, visible: false, frame4D: 0 },
-        { id: 'pred_tumor', url: './case_00003/segmentation_aligned_lowres.nii', colormap: 'blue', opacity: 0.5, visible: false, frame4D: 1 },
-        { id: 'pred_cyst', url: './case_00003/segmentation_aligned_lowres.nii', colormap: 'yellow', opacity: 0.5, visible: false, frame4D: 2 },
-      ];
+      // === GT ===
+      volumes.push({
+        name: "GT Kidney",
+        url: "./case_00003/segmentation_aligned_lowres.nii",
+        colormap: "red",
+        opacity: 0.6,
+        cal_min: 0.9,
+        cal_max: 1.1
+      });
+      volumes.push({
+        name: "GT Tumor",
+        url: "./case_00003/segmentation_aligned_lowres.nii",
+        colormap: "orange",
+        opacity: 0.6,
+        cal_min: 1.9,
+        cal_max: 2.1
+      });
 
-      await nv.loadVolumes(volumes);
-      console.log("✅ Volumes loaded successfully");
+      // === Prediction ===
+      volumes.push({
+        name: "PR Kidney",
+        url: "./case_00003/case_00003_aligned_lowres.nii",
+        colormap: "green",
+        opacity: 0.6,
+        cal_min: 0.9,
+        cal_max: 1.1
+      });
+      volumes.push({
+        name: "PR Tumor",
+        url: "./case_00003/case_00003_aligned_lowres.nii",
+        colormap: "lime",
+        opacity: 0.6,
+        cal_min: 1.9,
+        cal_max: 2.1
+      });
 
-      // === UI Controls ===
-      const chkBg = document.getElementById('chk-bg');
-      const chkGT = document.getElementById('chk-gt');
-      const chkPred = document.getElementById('chk-pred');
-      const opacitySlider = document.getElementById('opacity');
-
-      function updateVisibility() {
-        nv.volumes.forEach(v => {
-          if (v.id.startsWith('bg')) v.setVisible(chkBg.checked);
-          else if (v.id.startsWith('gt')) v.setVisible(chkGT.checked);
-          else if (v.id.startsWith('pred')) v.setVisible(chkPred.checked);
-        });
-        nv.updateGLVolume();
+      try {
+        await nv.loadVolumes(volumes);
+        console.log("All volumes loaded successfully");
+      } catch (err) {
+        console.error("Error loading volumes:", err);
       }
 
-      function updateOpacity() {
-        const val = parseFloat(opacitySlider.value);
-        nv.volumes.forEach(v => {
-          if (!v.id.startsWith('bg')) v.opacity = val;
+      // === 控制逻辑 ===
+      const toggle = (id, name) => {
+        const checkbox = document.getElementById(id);
+        checkbox.addEventListener("change", () => {
+          const v = nv.volumes.find(vol => vol.name === name);
+          if (v) {
+            v.opacity = checkbox.checked ? 0.6 : 0.0;
+            nv.refreshLayers();
+          }
         });
-        nv.updateGLVolume();
-      }
+      };
 
-      chkBg.onchange = updateVisibility;
-      chkGT.onchange = updateVisibility;
-      chkPred.onchange = updateVisibility;
-      opacitySlider.oninput = updateOpacity;
+      // Background
+      toggle("showBG", "Background");
+
+      // GT
+      toggle("gt1", "GT Kidney");
+      toggle("gt2", "GT Tumor");
+
+      // Predict
+      toggle("pr1", "PR Kidney");
+      toggle("pr2", "PR Tumor");
     });
   </script>
 </body>
