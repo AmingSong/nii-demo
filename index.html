@@ -70,36 +70,51 @@ window.addEventListener('load', async () => {
   });
   nv.attachTo('gl');
 
-  const base = "./case_00003/";
+  let base = "./case_00003/";
+  if (!base.endsWith("/")) base += "/";
 
-  function makeLabelLUT(alpha1, alpha2, alpha3) {
+  function resolveUrl(p) {
+    return new URL(p, window.location.href).toString();
+  }
+
+  async function assertReachable(u) {
+    if (typeof u !== "string" || u.trim().length === 0) throw new Error("empty-url");
+    try {
+      const r = await fetch(u, { method: "HEAD", cache: "no-store" });
+      if (!r.ok) throw new Error("http-" + r.status);
+    } catch (e) {
+      console.error("Unreachable URL:", u, e);
+      throw e;
+    }
+  }
+
+  function makeLabelLUT(a1, a2, a3) {
     return {
-      R: [  0,   0, 255, 255],
-      G: [  0, 255,   0, 255],
-      B: [  0, 255, 255,   0],
-      A: [  0, alpha1, alpha2, alpha3],
-      I: [  0,   1,    2,     3],
+      R: [0, 0, 255, 255],
+      G: [0, 255, 0, 255],
+      B: [0, 255, 255, 0],
+      A: [0, a1, a2, a3],
+      I: [0, 1, 2, 3],
       labels: ["background", "kidney", "tumor", "cyst"]
     };
   }
 
   let idxImage = -1, idxGT = -1, idxPred = -1;
 
-  function setAfterLoad(volIndex, name, opacity, lut) {
-    if (volIndex < 0 || !nv.volumes[volIndex]) return;
-    nv.volumes[volIndex].name = name;
-    nv.volumes[volIndex].opacity = opacity;
-    if (typeof nv.volumes[volIndex].setColormapLabel === "function") {
-      nv.volumes[volIndex].setColormapLabel(lut);
-    } else {
-      nv.volumes[volIndex].colormapLabel = lut;
-    }
-  }
-
   try {
-    const img  = await nv.addVolumeFromUrl(base + "imaging_float32_lowres.nii");
-    const gt   = await nv.addVolumeFromUrl(base + "segmentation_aligned_lowres.nii");
-    const pred = await nv.addVolumeFromUrl(base + "case_00003_aligned_lowres.nii");
+    const urlImg  = resolveUrl(base + "imaging_float32_lowres.nii");
+    const urlGT   = resolveUrl(base + "segmentation_aligned_lowres.nii");
+    const urlPred = resolveUrl(base + "case_00003_aligned_lowres.nii");
+
+    console.log("Resolved URLs:", { urlImg, urlGT, urlPred });
+
+    await assertReachable(urlImg);
+    await assertReachable(urlGT);
+    await assertReachable(urlPred);
+
+    const img  = await nv.addVolumeFromUrl(urlImg);
+    const gt   = await nv.addVolumeFromUrl(urlGT);
+    const pred = await nv.addVolumeFromUrl(urlPred);
 
     nv.volumes.forEach((v, i) => {
       if (v === img)  idxImage = i;
@@ -107,9 +122,28 @@ window.addEventListener('load', async () => {
       if (v === pred) idxPred = i;
     });
 
-    setAfterLoad(idxImage, "Image", 1.0, null);
-    setAfterLoad(idxGT,   "GT",    0.6, makeLabelLUT(160,160,160));
-    setAfterLoad(idxPred, "Pred",  0.6, makeLabelLUT(160,160,160));
+    if (idxImage >= 0) {
+      nv.volumes[idxImage].name = "Image";
+      nv.volumes[idxImage].opacity = 1.0;
+    }
+    if (idxGT >= 0) {
+      nv.volumes[idxGT].name = "GT";
+      nv.volumes[idxGT].opacity = 0.6;
+      if (typeof nv.volumes[idxGT].setColormapLabel === "function") {
+        nv.volumes[idxGT].setColormapLabel(makeLabelLUT(160,160,160));
+      } else {
+        nv.volumes[idxGT].colormapLabel = makeLabelLUT(160,160,160);
+      }
+    }
+    if (idxPred >= 0) {
+      nv.volumes[idxPred].name = "Pred";
+      nv.volumes[idxPred].opacity = 0.6;
+      if (typeof nv.volumes[idxPred].setColormapLabel === "function") {
+        nv.volumes[idxPred].setColormapLabel(makeLabelLUT(160,160,160));
+      } else {
+        nv.volumes[idxPred].colormapLabel = makeLabelLUT(160,160,160);
+      }
+    }
     nv.updateGLVolume();
   } catch (e) {
     console.error("Failed to load volumes:", e);
@@ -120,9 +154,7 @@ window.addEventListener('load', async () => {
     const v = nv.volumes[iVol];
     if (!v || !v.img) return false;
     const data = v.img;
-    for (let k = 0; k < data.length; k++) {
-      if (data[k] === value) return true;
-    }
+    for (let k = 0; k < data.length; k++) if (data[k] === value) return true;
     return false;
   }
 
