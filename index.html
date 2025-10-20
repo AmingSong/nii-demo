@@ -51,7 +51,7 @@
     window.addEventListener('load', async () => {
       const NiiVueClass = window.Niivue || (window.niivue ? window.niivue.Niivue : undefined);
       if (!NiiVueClass) {
-        console.error("❌ NiiVue failed to load.");
+        console.error("NiiVue failed to load.");
         return;
       }
 
@@ -62,7 +62,7 @@
       nv.attachTo('gl');
 
       // === Case_00003 Data (your repo) ===
-      const base = "https://github.com/AmingSong/nii-demo/tree/main/case_00003/";
+      const base = "https://raw.githubusercontent.com/AmingSong/nii-demo/main/case_00003/";
 
       const volumes = [
         { name: "Image", url: base + "imaging_float32_lowres.nii", colormap: "gray", opacity: 1.0 },
