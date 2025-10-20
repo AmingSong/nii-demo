@@ -64,41 +64,34 @@ window.addEventListener('load', async () => {
   nv.attachTo('gl');
 
   const base = "./case_00003/";
-  const files = [
-    { url: base + "imaging_float32_lowres.nii",      name: "Image", colormap: "gray", opacity: 1.0, isSeg: false },
-    { url: base + "segmentation_aligned_lowres.nii", name: "GT",    colormap: "gray", opacity: 0.6, isSeg: true  },
-    { url: base + "case_00003_aligned_lowres.nii",   name: "Pred",  colormap: "gray", opacity: 0.6, isSeg: true  },
-  ];
-
-  async function addCompat(url, options) {
-    if (!nv.addVolumeFromUrl) throw new Error("no-addVolumeFromUrl");
-    try {
-      return await nv.addVolumeFromUrl(url, options);
-    } catch (e) {
-      try {
-        return await nv.addVolumeFromUrl({ url, ...options });
-      } catch (e2) {
-        throw e2;
-      }
-    }
-  }
 
   try {
-    for (const f of files) {
-      await addCompat(f.url, { name: f.name, colormap: f.colormap, opacity: f.opacity });
-    }
-    nv.volumes.forEach((v) => {
-      const meta = files.find(x => x.name === v.name);
-      if (meta && !meta.isSeg && nv.setColormap) nv.setColormap(v.id, meta.colormap);
-    });
+    // Strict: pass only a string URL to avoid old UMD argument branching.
+    await nv.addVolumeFromUrl(base + "imaging_float32_lowres.nii");
+    let v = nv.volumes[nv.volumes.length - 1];
+    v.name = "Image";
+    v.opacity = 1.0;
+    if (nv.setColormap) nv.setColormap(v.id, "gray");
+
+    await nv.addVolumeFromUrl(base + "segmentation_aligned_lowres.nii");
+    v = nv.volumes[nv.volumes.length - 1];
+    v.name = "GT";
+    v.opacity = 0.6;
+
+    await nv.addVolumeFromUrl(base + "case_00003_aligned_lowres.nii");
+    v = nv.volumes[nv.volumes.length - 1];
+    v.name = "Pred";
+    v.opacity = 0.6;
+
     console.log("All volumes loaded.");
   } catch (e) {
     console.error("Failed to load volumes:", e);
     return;
   }
 
-  const idxGT   = nv.volumes.findIndex(v => v.name === "GT");
-  const idxPred = nv.volumes.findIndex(v => v.name === "Pred");
+  const idxImage = nv.volumes.findIndex(v => v.name === "Image");
+  const idxGT    = nv.volumes.findIndex(v => v.name === "GT");
+  const idxPred  = nv.volumes.findIndex(v => v.name === "Pred");
 
   function makeLabelLUT(a1, a2, a3) {
     return {
@@ -114,11 +107,8 @@ window.addEventListener('load', async () => {
   function applyLabelLUT(volIndex, a1, a2, a3) {
     if (volIndex < 0 || !nv.volumes[volIndex]) return;
     const lut = makeLabelLUT(a1, a2, a3);
-    if (typeof nv.volumes[volIndex].setColormapLabel === "function") {
-      nv.volumes[volIndex].setColormapLabel(lut);
-    } else {
-      nv.volumes[volIndex].colormapLabel = lut;
-    }
+    // For v0.36 UMD, assigning colormapLabel is compatible; setColormapLabel may not exist.
+    nv.volumes[volIndex].colormapLabel = lut;
   }
 
   applyLabelLUT(idxGT,   160,160,160);
@@ -128,8 +118,8 @@ window.addEventListener('load', async () => {
   async function hasLabel(iVol, value) {
     const v = nv.volumes[iVol];
     if (!v) return false;
-    const data = v.img || (v.img2RAS && v.img2RAS());
-    if (!data) return false;
+    const data = v.img || (typeof v.img2RAS === "function" ? v.img2RAS() : null);
+    if (!data || !data.length) return false;
     for (let k = 0; k < data.length; k++) if (data[k] === value) return true;
     return false;
   }
@@ -164,7 +154,6 @@ window.addEventListener('load', async () => {
     applyLabelLUT(idxPred, predKidney.checked ? 160 : 0, predTumor.checked ? 160 : 0, predCyst.checked ? 160 : 0);
     nv.updateGLVolume();
   }
-
   gtKidney.addEventListener('change', applyAllLabelVisibility);
   gtTumor .addEventListener('change', applyAllLabelVisibility);
   gtCyst  .addEventListener('change', applyAllLabelVisibility);
