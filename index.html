@@ -43,14 +43,17 @@
 
   <script>
     window.addEventListener('load', async () => {
-      if (!window.Niivue) {
-        console.error("Niivue not found. Check ./js/niivue.umd.js.");
+      const NiiVueClass =
+        window.Niivue ||
+        (window.niivue && window.niivue.Niivue) ||
+        (window.nv && window.nv.Niivue);
+
+      if (!NiiVueClass) {
+        console.error("Cannot find Niivue in window scope. Check ./js/niivue.umd.js.");
         return;
       }
 
-      console.log("Niivue version:", window.Niivue.VERSION || "unknown");
-
-      const nv = new Niivue({
+      const nv = new NiiVueClass({
         show3Dcrosshair: true,
         isWebGL2: true,
         dragAndDropEnabled: false,
@@ -72,11 +75,22 @@
           if (!res.ok) throw new Error("HTTP " + res.status);
           const buf = await res.arrayBuffer();
 
-          await nv.addVolumeFromArrayBuffer(buf, {
-            name: f.name,
-            colormap: f.colormap,
-            opacity: f.opacity,
-          });
+          if (nv.addVolumeFromArrayBuffer) {
+            await nv.addVolumeFromArrayBuffer(buf, {
+              name: f.name,
+              colormap: f.colormap,
+              opacity: f.opacity,
+            });
+          } else if (NiiVueClass.NVImage) {
+            const img = new NiiVueClass.NVImage();
+            await img.loadFromArrayBuffer(buf);
+            img.name = f.name;
+            img.colormap = f.colormap;
+            img.opacity = f.opacity;
+            nv.addVolume(img);
+          } else {
+            throw new Error("No valid loading method in this Niivue build.");
+          }
 
           console.log("Loaded", f.file);
         } catch (e) {
