@@ -62,7 +62,7 @@ window.addEventListener('load', async () => {
   await nv.addVolumeFromUrl({
     url: base + "imaging_float32_lowres.nii",
     name: "Image",
-    colormap: "gray",
+    colormap: "Gray",
     opacity: 1.0
   });
 
@@ -70,7 +70,7 @@ window.addEventListener('load', async () => {
   await nv.addVolumeFromUrl({
     url: base + "segmentation_aligned_lowres.nii",
     name: "GT",
-    colormap: "red",
+    colormap: "Red",
     opacity: 0.6
   });
 
@@ -78,7 +78,7 @@ window.addEventListener('load', async () => {
   await nv.addVolumeFromUrl({
     url: base + "case_00003_aligned_lowres.nii",
     name: "Pred",
-    colormap: "green",
+    colormap: "Green",
     opacity: 0.6
   });
 
