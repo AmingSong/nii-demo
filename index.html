@@ -58,8 +58,9 @@
 <script>
 window.addEventListener('load', async () => {
   const NiiVueClass = window.Niivue || (window.niivue && window.niivue.Niivue);
-  if (!NiiVueClass) {
-    console.error("Niivue not found. Check ./js/niivue.umd.js path.");
+  const NVImageClass = (window.niivue && window.niivue.NVImage) || window.NVImage;
+  if (!NiiVueClass || !NVImageClass) {
+    console.error("Niivue or NVImage not found. Check ./js/niivue.umd.js path.");
     return;
   }
 
@@ -87,17 +88,26 @@ window.addEventListener('load', async () => {
   let idxImage = -1, idxGT = -1, idxPred = -1;
 
   try {
-    const img  = await nv.addVolumeFromUrl({ url: base + "imaging_float32_lowres.nii",      name: "Image", colormap: "gray", opacity: 1.0 });
-    const gt   = await nv.addVolumeFromUrl({ url: base + "segmentation_aligned_lowres.nii", name: "GT",    colormap: "gray", opacity: 0.6 });
-    const pred = await nv.addVolumeFromUrl({ url: base + "case_00003_aligned_lowres.nii",   name: "Pred",  colormap: "gray", opacity: 0.6 });
+    const img  = await NVImageClass.loadFromUrl({ url: base + "imaging_float32_lowres.nii", name: "Image" });
+    const gt   = await NVImageClass.loadFromUrl({ url: base + "segmentation_aligned_lowres.nii", name: "GT" });
+    const pred = await NVImageClass.loadFromUrl({ url: base + "case_00003_aligned_lowres.nii", name: "Pred" });
+
+    nv.addVolume(img);
+    nv.addVolume(gt);
+    nv.addVolume(pred);
 
     nv.volumes.forEach((v, i) => {
-      if (v === img)  idxImage = i;
-      if (v === gt)   idxGT = i;
-      if (v === pred) idxPred = i;
+      if (v.name === "Image") idxImage = i;
+      if (v.name === "GT")    idxGT = i;
+      if (v.name === "Pred")  idxPred = i;
     });
 
+    if (idxImage >= 0) {
+      nv.volumes[idxImage].opacity = 1.0;
+      nv.setColormap(nv.volumes[idxImage].id, "gray");
+    }
     if (idxGT >= 0) {
+      nv.volumes[idxGT].opacity = 0.6;
       if (typeof nv.volumes[idxGT].setColormapLabel === "function") {
         nv.volumes[idxGT].setColormapLabel(makeLabelLUT(160,160,160));
       } else {
@@ -105,6 +115,7 @@ window.addEventListener('load', async () => {
       }
     }
     if (idxPred >= 0) {
+      nv.volumes[idxPred].opacity = 0.6;
       if (typeof nv.volumes[idxPred].setColormapLabel === "function") {
         nv.volumes[idxPred].setColormapLabel(makeLabelLUT(160,160,160));
       } else {
@@ -113,7 +124,7 @@ window.addEventListener('load', async () => {
     }
     nv.updateGLVolume();
   } catch (e) {
-    console.error("Failed to load volumes:", e);
+    console.error("Failed to load volumes via NVImage:", e);
     return;
   }
 
