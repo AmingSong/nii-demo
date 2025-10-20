@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NiiVue Viewer – GitHub Pages Version</title>
+  <title>NiiVue – GT vs Prediction Viewer</title>
   <style>
     html, body {
       margin: 0;
@@ -17,59 +17,90 @@
       height: 100%;
       display: block;
     }
+    #controls {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(0, 0, 0, 0.6);
+      color: white;
+      padding: 10px;
+      border-radius: 8px;
+      font-family: sans-serif;
+    }
+    #controls label { display: block; margin: 5px 0; }
+    input[type="range"] { width: 100px; }
   </style>
-
-  <!-- Load local NiiVue -->
   <script src="./js/niivue.umd.js"></script>
 </head>
+
 <body>
   <canvas id="gl"></canvas>
+
+  <div id="controls">
+    <strong>Layers</strong><br>
+    <label><input type="checkbox" id="chk-bg" checked> Background</label>
+    <label><input type="checkbox" id="chk-gt" checked> Ground Truth</label>
+    <label><input type="checkbox" id="chk-pred"> Prediction</label>
+    <br>
+    <label>Opacity: <input type="range" id="opacity" min="0" max="1" step="0.05" value="0.5"></label>
+  </div>
 
   <script>
     window.addEventListener('load', async () => {
       const NiiVueClass = window.Niivue || (window.niivue ? window.niivue.Niivue : undefined);
-      if (typeof NiiVueClass === 'undefined') {
-        console.error("NiiVue failed to load. window.niivue is", window.niivue);
+      if (!NiiVueClass) {
+        console.error("❌ NiiVue failed to load");
         return;
       }
 
-      const nv = new NiiVueClass({
-        show3Dcrosshair: true,
-        isWebGL2: true,
-        dragAndDropEnabled: true,
-        logging: true
-      });
-
+      const nv = new NiiVueClass({ show3Dcrosshair: true, isWebGL2: true });
       nv.attachTo('gl');
 
-      const volumeList = [
-        {
-          url: "https://raw.githubusercontent.com/AmingSong/nii-demo/main/case_00003/imaging_small.nii.gz",
-          colormap: "gray",
-          opacity: 1.0,
-          visible: true
-        },
-        {
-          url: "https://raw.githubusercontent.com/AmingSong/nii-demo/main/case_00003/segmentation.nii.gz",
-          colormap: "red",
-          opacity: 0.5,
-          visible: true
-        },
-        {
-          url: "https://raw.githubusercontent.com/AmingSong/nii-demo/main/case_00003/case_00003.nii.gz",
-          colormap: "green",
-          opacity: 0.5,
-          visible: true
-        }
+      // === Volume definitions ===
+      const volumes = [
+        { id: 'bg', url: './case_00003/imaging_float32.nii.gz', colormap: 'gray', opacity: 1.0, visible: true },
+
+        // GT (1/2/3 -> kidney/tumor/cyst)
+        { id: 'gt_kidney', url: './case_00003/case_00003_aligned.nii', colormap: 'red', opacity: 0.5, visible: true, frame4D: 0 },
+        { id: 'gt_tumor', url: './case_00003/case_00003_aligned.nii', colormap: 'purple', opacity: 0.5, visible: true, frame4D: 1 },
+        { id: 'gt_cyst', url: './case_00003/case_00003_aligned.nii', colormap: 'orange', opacity: 0.5, visible: true, frame4D: 2 },
+
+        // Prediction (1/2/3 -> kidney/tumor/cyst)
+        { id: 'pred_kidney', url: './case_00003/segmentation_aligned.nii', colormap: 'green', opacity: 0.5, visible: false, frame4D: 0 },
+        { id: 'pred_tumor', url: './case_00003/segmentation_aligned.nii', colormap: 'blue', opacity: 0.5, visible: false, frame4D: 1 },
+        { id: 'pred_cyst', url: './case_00003/segmentation_aligned.nii', colormap: 'yellow', opacity: 0.5, visible: false, frame4D: 2 },
       ];
 
-      try {
-        console.log("NIIVUE VERSION ", nv.version);
-        await nv.loadVolumes(volumeList);
-        console.log("Volumes loaded successfully");
-      } catch (err) {
-        console.error("Error loading volumes:", err);
+      await nv.loadVolumes(volumes);
+      console.log("✅ Volumes loaded successfully");
+
+      // === UI Controls ===
+      const chkBg = document.getElementById('chk-bg');
+      const chkGT = document.getElementById('chk-gt');
+      const chkPred = document.getElementById('chk-pred');
+      const opacitySlider = document.getElementById('opacity');
+
+      function updateVisibility() {
+        nv.volumes.forEach(v => {
+          if (v.id.startsWith('bg')) v.setVisible(chkBg.checked);
+          else if (v.id.startsWith('gt')) v.setVisible(chkGT.checked);
+          else if (v.id.startsWith('pred')) v.setVisible(chkPred.checked);
+        });
+        nv.updateGLVolume();
       }
+
+      function updateOpacity() {
+        const val = parseFloat(opacitySlider.value);
+        nv.volumes.forEach(v => {
+          if (!v.id.startsWith('bg')) v.opacity = val;
+        });
+        nv.updateGLVolume();
+      }
+
+      chkBg.onchange = updateVisibility;
+      chkGT.onchange = updateVisibility;
+      chkPred.onchange = updateVisibility;
+      opacitySlider.oninput = updateOpacity;
     });
   </script>
 </body>
