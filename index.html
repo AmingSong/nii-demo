@@ -8,7 +8,7 @@
   <style>
     html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
     #toolbar {
-      position: absolute; top: 10px; left: 10px; z-index: 10;
+      position: absolute; top: 10px; left: 10px; z-index: 1000;
       background: rgba(0,0,0,0.72); color: #fff; font-family: system-ui, sans-serif; font-size: 14px;
       padding: 12px; border-radius: 12px; min-width: 320px;
       box-shadow: 0 4px 16px rgba(0,0,0,0.35);
@@ -19,7 +19,7 @@
     .hint { color: #bbb; font-size: 12px; }
     .row { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; }
     .section { margin-top: 6px; padding: 6px 8px; background: rgba(255,255,255,0.06); border-radius: 8px; }
-    canvas { width: 100%; height: 100%; display: block; }
+    canvas { width: 100%; height: 100%; display: block; position: relative; z-index: 0; }
   </style>
   <script src="./js/niivue.umd.js"></script>
 </head>
@@ -77,8 +77,8 @@ window.addEventListener('load', async () => {
     await nv.addVolumeFromUrl({ url: urlPred });
 
     let img  = nv.volumes[0]; if (img)  { img.name  = "Image"; img.opacity = 1.0; if (nv.setColormap) nv.setColormap(img.id, "gray"); }
-    let gt   = nv.volumes[1]; if (gt)   { gt.name   = "GT";    gt.opacity  = 0.6; gt.isLabel = true; }
-    let pred = nv.volumes[2]; if (pred) { pred.name = "Pred";  pred.opacity= 0.6; pred.isLabel = true; }
+    let gt   = nv.volumes[1]; if (gt)   { gt.name   = "GT";    gt.opacity  = 0.6; gt.isLabel = true; gt.colormap = null; }
+    let pred = nv.volumes[2]; if (pred) { pred.name = "Pred";  pred.opacity= 0.6; pred.isLabel = true; pred.colormap = null; }
 
     console.log("All volumes loaded.");
   } catch (e) {
@@ -90,7 +90,6 @@ window.addEventListener('load', async () => {
   const idxPred = nv.volumes.findIndex(v => v.name === "Pred");
 
   function makeLabelLUT(a1, a2, a3) {
-    // 1: red, 2: green, 3: blue
     return {
       R: [0, 255,   0,   0],
       G: [0,   0, 255,   0],
@@ -100,14 +99,16 @@ window.addEventListener('load', async () => {
       labels: ["background", "kidney", "tumor", "cyst"]
     };
   }
-
   function applyLabelLUT(volIndex, a1, a2, a3) {
-    if (volIndex < 0 || !nv.volumes[volIndex]) return;
+    const vol = nv.volumes[volIndex];
+    if (!vol) return;
     const lut = makeLabelLUT(a1, a2, a3);
-    nv.volumes[volIndex].colormapLabel = lut;
+    vol.colormapLabel = lut;
+    vol.colorMapLabel = lut;
+    vol.isLabel = true;
+    vol.colormap = null;
   }
 
-  // initial LUTs (all labels visible)
   applyLabelLUT(idxGT,   160,160,160);
   applyLabelLUT(idxPred, 160,160,160);
   nv.updateGLVolume();
