@@ -3,8 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NiiVue Viewer – GT vs Prediction</title>
-
+  <title>NiiVue Viewer – GT vs Prediction (Fixed for GitHub Pages)</title>
   <style>
     html, body {
       margin: 0;
@@ -34,7 +33,6 @@
       display: block;
     }
   </style>
-
   <script src="./js/niivue.umd.js"></script>
 </head>
 
@@ -51,42 +49,52 @@
   <script>
     window.addEventListener('load', async () => {
       console.log("Initializing NiiVue...");
-
       const nv = new niivue.Niivue({ show3Dcrosshair: true });
       nv.attachTo('gl');
 
       const base = "./case_00003/";
-      const volumes = [
-        { name: "Image", url: base + "imaging_float32_lowres.nii", colormap: "gray", opacity: 1.0 },
-        { name: "GT", url: base + "segmentation_aligned_lowres.nii", colormap: "red", opacity: 0.6 },
-        { name: "Pred", url: base + "case_00003_aligned_lowres.nii", colormap: "green", opacity: 0.6 }
+      const files = [
+        { name: "Image", file: "imaging_float32_lowres.nii", colormap: "gray", opacity: 1.0 },
+        { name: "GT", file: "segmentation_aligned_lowres.nii", colormap: "red", opacity: 0.6 },
+        { name: "Pred", file: "case_00003_aligned_lowres.nii", colormap: "green", opacity: 0.6 }
       ];
 
-      try {
-        console.log("Loading volumes...");
-        await nv.loadVolumes(volumes);
-        console.log("All volumes loaded successfully.");
-      } catch (err) {
-        console.error("Error loading volumes:", err);
+      const volumes = [];
+
+      for (const f of files) {
+        try {
+          console.log("Fetching", f.file);
+          const res = await fetch(base + f.file);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const buf = await res.arrayBuffer();
+          const nii = await niivue.NVImage.loadFromArrayBuffer(buf);
+          nii.colormap = f.colormap;
+          nii.opacity = f.opacity;
+          volumes.push(nii);
+          console.log("Loaded", f.file);
+        } catch (err) {
+          console.error("Failed to load", f.file, err);
+        }
       }
 
-      // === UI interactions ===
-      document.getElementById("showGT").addEventListener("change", (e) => {
-        nv.volumes[1].opacity = e.target.checked ? parseFloat(document.getElementById("opacity").value) : 0.0;
-        nv.updateGLVolume();
-      });
+      await nv.addVolumes(volumes);
+      console.log("All volumes added successfully.");
 
-      document.getElementById("showPred").addEventListener("change", (e) => {
-        nv.volumes[2].opacity = e.target.checked ? parseFloat(document.getElementById("opacity").value) : 0.0;
-        nv.updateGLVolume();
-      });
+      // === UI ===
+      const opacitySlider = document.getElementById("opacity");
+      const gtCheckbox = document.getElementById("showGT");
+      const predCheckbox = document.getElementById("showPred");
 
-      document.getElementById("opacity").addEventListener("input", (e) => {
-        const val = parseFloat(e.target.value);
-        nv.volumes[1].opacity = document.getElementById("showGT").checked ? val : 0.0;
-        nv.volumes[2].opacity = document.getElementById("showPred").checked ? val : 0.0;
+      function updateOpacity() {
+        const val = parseFloat(opacitySlider.value);
+        if (nv.volumes[1]) nv.volumes[1].opacity = gtCheckbox.checked ? val : 0.0;
+        if (nv.volumes[2]) nv.volumes[2].opacity = predCheckbox.checked ? val : 0.0;
         nv.updateGLVolume();
-      });
+      }
+
+      gtCheckbox.addEventListener("change", updateOpacity);
+      predCheckbox.addEventListener("change", updateOpacity);
+      opacitySlider.addEventListener("input", updateOpacity);
     });
   </script>
 </body>
