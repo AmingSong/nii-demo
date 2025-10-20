@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NiiVue Viewer – GT vs Prediction (Per-layer Labels 1/2/3)</title>
+  <title>NiiVue Viewer – GT vs Prediction (Per-label 1/2/3)</title>
   <style>
     html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
     #toolbar {
@@ -63,25 +63,27 @@ window.addEventListener('load', async () => {
   const nv = new NiiVueClass({ show3Dcrosshair: true, isWebGL2: true, logging: true });
   nv.attachTo('gl');
 
-  const base = "./case_00003/";
+  function absUrl(p) { return new URL(p, window.location.href).toString(); }
+
+  // Adjust base as needed; keep it simple and resolve to absolute URLs.
+  let base = "./case_00003/";
+  if (!base.endsWith("/")) base += "/";
+
+  const urlImg  = absUrl(base + "imaging_float32_lowres.nii");
+  const urlGT   = absUrl(base + "segmentation_aligned_lowres.nii");
+  const urlPred = absUrl(base + "case_00003_aligned_lowres.nii");
+  console.log("Resolved URLs:", { urlImg, urlGT, urlPred });
 
   try {
-    // Strict: pass only a string URL to avoid old UMD argument branching.
-    await nv.addVolumeFromUrl(base + "imaging_float32_lowres.nii");
-    let v = nv.volumes[nv.volumes.length - 1];
-    v.name = "Image";
-    v.opacity = 1.0;
-    if (nv.setColormap) nv.setColormap(v.id, "gray");
+    // Only pass an object with a non-empty url field.
+    await nv.addVolumeFromUrl({ url: urlImg });
+    await nv.addVolumeFromUrl({ url: urlGT  });
+    await nv.addVolumeFromUrl({ url: urlPred });
 
-    await nv.addVolumeFromUrl(base + "segmentation_aligned_lowres.nii");
-    v = nv.volumes[nv.volumes.length - 1];
-    v.name = "GT";
-    v.opacity = 0.6;
-
-    await nv.addVolumeFromUrl(base + "case_00003_aligned_lowres.nii");
-    v = nv.volumes[nv.volumes.length - 1];
-    v.name = "Pred";
-    v.opacity = 0.6;
+    // Post-config: set names, opacity, and base colormap for the image.
+    let img  = nv.volumes[0]; if (img)  { img.name  = "Image"; img.opacity = 1.0; if (nv.setColormap) nv.setColormap(img.id, "gray"); }
+    let gt   = nv.volumes[1]; if (gt)   { gt.name   = "GT";    gt.opacity  = 0.6; }
+    let pred = nv.volumes[2]; if (pred) { pred.name = "Pred";  pred.opacity= 0.6; }
 
     console.log("All volumes loaded.");
   } catch (e) {
@@ -89,9 +91,8 @@ window.addEventListener('load', async () => {
     return;
   }
 
-  const idxImage = nv.volumes.findIndex(v => v.name === "Image");
-  const idxGT    = nv.volumes.findIndex(v => v.name === "GT");
-  const idxPred  = nv.volumes.findIndex(v => v.name === "Pred");
+  const idxGT   = nv.volumes.findIndex(v => v.name === "GT");
+  const idxPred = nv.volumes.findIndex(v => v.name === "Pred");
 
   function makeLabelLUT(a1, a2, a3) {
     return {
@@ -103,12 +104,10 @@ window.addEventListener('load', async () => {
       labels: ["background", "kidney", "tumor", "cyst"]
     };
   }
-
   function applyLabelLUT(volIndex, a1, a2, a3) {
     if (volIndex < 0 || !nv.volumes[volIndex]) return;
     const lut = makeLabelLUT(a1, a2, a3);
-    // For v0.36 UMD, assigning colormapLabel is compatible; setColormapLabel may not exist.
-    nv.volumes[volIndex].colormapLabel = lut;
+    nv.volumes[volIndex].colormapLabel = lut; // v0.36-compatible path
   }
 
   applyLabelLUT(idxGT,   160,160,160);
