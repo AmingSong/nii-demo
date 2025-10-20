@@ -30,86 +30,62 @@
   </div>
 
   <canvas id="gl"></canvas>
-
 <script>
 window.addEventListener('load', async () => {
-  try {
-    const NiiVueClass = window.Niivue || (window.niivue && window.niivue.Niivue);
-    if (!NiiVueClass) {
-      console.error("Niivue not found in window scope. Check niivue.umd.js path.");
-      return;
+  const NiiVueClass = window.Niivue || (window.niivue && window.niivue.Niivue);
+  const nv = new NiiVueClass({ show3Dcrosshair: true, isWebGL2: true, logging: true });
+  nv.attachTo('gl');
+
+  const base = "./case_00003/";
+
+  // 明确写上 name 且带扩展名（老版本更稳）
+  const vols = [
+    { url: base + "imaging_float32_lowres.nii",      name: "imaging_float32_lowres.nii",      colormap: "gray",   opacity: 1.0 },
+    { url: base + "segmentation_aligned_lowres.nii", name: "segmentation_aligned_lowres.nii", colormap: "warm",   opacity: 0.6 },
+    { url: base + "case_00003_aligned_lowres.nii",   name: "case_00003_aligned_lowres.nii",   colormap: "viridis",opacity: 0.6 },
+  ];
+
+  // 预检：任何一项 url 不是字符串都直接抛出
+  vols.forEach((v, i) => {
+    if (typeof v.url !== 'string' || !v.url.length) {
+      throw new TypeError(`volume[${i}] 的 url 非字符串或为空：${v.url}`);
     }
-
-    const nv = new NiiVueClass({
-      show3Dcrosshair: true,
-      isWebGL2: true,
-      logging: true,       // 控制台输出有助排错
-    });
-    nv.attachTo('gl');
-
-    const base = "./case_00003/";
-    const desiredColormaps = { image: "gray", gt: "warm", pred: "viridis" };
-
-    // 取可用的内置 colormap 列表并做回退
-    const available = (typeof nv.colormaps === 'function') ? nv.colormaps() : [];
-    function safeMap(name) {
-      if (available.length && !available.includes(name)) {
-        console.warn(`Colormap "${name}" not found. Falling back to "gray". Available:`, available);
-        return "gray";
-      }
-      return name;
+    if (!/\.(nii|nii\.gz|nrrd|mgh|mgz)$/i.test(v.url) && !/\.(nii|nii\.gz|nrrd|mgh|mgz)$/i.test(v.name || '')) {
+      console.warn(`volume[${i}] 缺少可识别扩展名（将用 name 兜底）：url=${v.url} name=${v.name}`);
     }
+  });
 
-    const volumeList = [
-      {
-        url: base + "imaging_float32_lowres.nii", // 主图像
-        name: "Image",
-        colormap: safeMap(desiredColormaps.image),
-        opacity: 1.0,
-        visible: true,
-      },
-      {
-        url: base + "segmentation_aligned_lowres.nii", // GT
-        name: "GT",
-        colormap: safeMap(desiredColormaps.gt),
-        opacity: 0.6,
-        visible: true,
-      },
-      {
-        url: base + "case_00003_aligned_lowres.nii",   // 预测
-        name: "Pred",
-        colormap: safeMap(desiredColormaps.pred),
-        opacity: 0.6,
-        visible: true,
-      }
-    ];
-
-    console.log("Attempting to load volumes...", volumeList);
-    await nv.loadVolumes(volumeList); // 官方推荐的一次性加载方式
-    console.log("All volumes loaded.", nv.volumes);
-
-    // --- UI 绑定 ---
-    const gtCB   = document.getElementById('showGT');
-    const predCB = document.getElementById('showPred');
-    const opSL   = document.getElementById('opacity');
-
-    function applyUI() {
-      const val = parseFloat(opSL.value);
-      // nv.volumes[0] = Image, [1] = GT, [2] = Pred（按上面装载顺序）
-      if (nv.volumes[1]) nv.volumes[1].opacity = gtCB.checked   ? val : 0.0;
-      if (nv.volumes[2]) nv.volumes[2].opacity = predCB.checked ? val : 0.0;
-      nv.updateGLVolume();
+  // 逐个加载以 pinpoint 到具体出错对象
+  async function safeAdd(o, idx) {
+    try {
+      console.log(`Loading [${idx}]`, o);
+      await nv.addVolumeFromUrl(o); // 或换成 nv.loadVolumes([o]) 逐个
+      console.log(`Loaded [${idx}] OK`);
+    } catch (e) {
+      console.error(`❌ Failed at volume[${idx}]`, o, e);
+      throw e; // 停在第一个坏的
     }
-
-    gtCB.addEventListener('change', applyUI);
-    predCB.addEventListener('change', applyUI);
-    opSL.addEventListener('input', applyUI);
-    applyUI();
-
-  } catch (e) {
-    console.error("Failed to initialize NiiVue or load volumes:", e);
-    console.error("Tips: check file paths, CORS/static server, and .nii accessibility.");
   }
+
+  for (let i = 0; i < vols.length; i++) {
+    await safeAdd(vols[i], i);
+  }
+
+  // —— UI 同你原来一致 ——
+  const gtCB   = document.getElementById('showGT');
+  const predCB = document.getElementById('showPred');
+  const opSL   = document.getElementById('opacity');
+
+  function applyUI() {
+    const val = parseFloat(opSL.value);
+    if (nv.volumes[1]) nv.volumes[1].opacity = gtCB.checked   ? val : 0.0;
+    if (nv.volumes[2]) nv.volumes[2].opacity = predCB.checked ? val : 0.0;
+    nv.updateGLVolume();
+  }
+  gtCB.addEventListener('change', applyUI);
+  predCB.addEventListener('change', applyUI);
+  opSL.addEventListener('input', applyUI);
+  applyUI();
 });
 </script>
 
