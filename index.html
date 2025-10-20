@@ -85,35 +85,31 @@ window.addEventListener('load', async () => {
 
   let idxImage = -1, idxGT = -1, idxPred = -1;
 
-  async function loadOneVolume(opts) {
-    return nv.addVolumeFromUrl(opts);
+  function setAfterLoad(volIndex, name, opacity, lut) {
+    if (volIndex < 0 || !nv.volumes[volIndex]) return;
+    nv.volumes[volIndex].name = name;
+    nv.volumes[volIndex].opacity = opacity;
+    if (typeof nv.volumes[volIndex].setColormapLabel === "function") {
+      nv.volumes[volIndex].setColormapLabel(lut);
+    } else {
+      nv.volumes[volIndex].colormapLabel = lut;
+    }
   }
 
   try {
-    const img = await loadOneVolume({ url: base + "imaging_float32_lowres.nii", name: "Image", colormap: "gray", opacity: 1.0 });
-    const gt  = await loadOneVolume({ url: base + "segmentation_aligned_lowres.nii", name: "GT", colormap: "gray", opacity: 0.6 });
-    const pr  = await loadOneVolume({ url: base + "case_00003_aligned_lowres.nii",   name: "Pred", colormap: "gray", opacity: 0.6 });
+    const img  = await nv.addVolumeFromUrl(base + "imaging_float32_lowres.nii");
+    const gt   = await nv.addVolumeFromUrl(base + "segmentation_aligned_lowres.nii");
+    const pred = await nv.addVolumeFromUrl(base + "case_00003_aligned_lowres.nii");
 
     nv.volumes.forEach((v, i) => {
-      if (v.name === "Image") idxImage = i;
-      if (v.name === "GT")    idxGT = i;
-      if (v.name === "Pred")  idxPred = i;
+      if (v === img)  idxImage = i;
+      if (v === gt)   idxGT = i;
+      if (v === pred) idxPred = i;
     });
 
-    if (idxGT >= 0) {
-      if (typeof nv.volumes[idxGT].setColormapLabel === "function") {
-        nv.volumes[idxGT].setColormapLabel(makeLabelLUT(160,160,160));
-      } else {
-        nv.volumes[idxGT].colormapLabel = makeLabelLUT(160,160,160);
-      }
-    }
-    if (idxPred >= 0) {
-      if (typeof nv.volumes[idxPred].setColormapLabel === "function") {
-        nv.volumes[idxPred].setColormapLabel(makeLabelLUT(160,160,160));
-      } else {
-        nv.volumes[idxPred].colormapLabel = makeLabelLUT(160,160,160);
-      }
-    }
+    setAfterLoad(idxImage, "Image", 1.0, null);
+    setAfterLoad(idxGT,   "GT",    0.6, makeLabelLUT(160,160,160));
+    setAfterLoad(idxPred, "Pred",  0.6, makeLabelLUT(160,160,160));
     nv.updateGLVolume();
   } catch (e) {
     console.error("Failed to load volumes:", e);
