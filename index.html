@@ -58,7 +58,6 @@
 <script>
 window.addEventListener('load', async () => {
   const NiiVueClass = window.Niivue || (window.niivue && window.niivue.Niivue);
-  const NVImageClass = (window.niivue && window.niivue.NVImage) || window.NVImage;
   if (!NiiVueClass) { console.error("Niivue not found."); return; }
 
   const nv = new NiiVueClass({ show3Dcrosshair: true, isWebGL2: true, logging: true });
@@ -71,48 +70,26 @@ window.addEventListener('load', async () => {
     { url: base + "case_00003_aligned_lowres.nii",   name: "Pred",  colormap: "gray", opacity: 0.6, isSeg: true  },
   ];
 
-  async function tryAddViaAddObject(o) {
+  async function addCompat(url, options) {
     if (!nv.addVolumeFromUrl) throw new Error("no-addVolumeFromUrl");
-    return await nv.addVolumeFromUrl({ url: o.url, name: o.name, colormap: o.colormap, opacity: o.opacity });
-  }
-  async function tryAddViaAddString(o) {
-    if (!nv.addVolumeFromUrl) throw new Error("no-addVolumeFromUrl");
-    return await nv.addVolumeFromUrl(o.url);
-  }
-  async function tryAddViaNVImageUrl(o) {
-    if (!NVImageClass || !NVImageClass.loadFromUrl) throw new Error("no-NVImage-loadFromUrl");
-    const img = await NVImageClass.loadFromUrl({ url: o.url, name: o.name });
-    nv.addVolume(img);
-    return img;
-  }
-  async function tryAddViaArrayBuffer(o) {
-    const hasAB = NVImageClass && NVImageClass.loadFromArrayBuffer;
-    if (!hasAB) throw new Error("no-ArrayBuffer-loader");
-    const r = await fetch(o.url, { cache: "no-store" });
-    if (!r.ok) throw new Error("http-" + r.status);
-    const buf = await r.arrayBuffer();
-    const img = await NVImageClass.loadFromArrayBuffer({ arrayBuffer: buf, name: o.name });
-    nv.addVolume(img);
-    return img;
-  }
-
-  async function addSmart(o) {
-    const errors = [];
-    const steps = [tryAddViaAddObject, tryAddViaAddString, tryAddViaNVImageUrl, tryAddViaArrayBuffer];
-    for (const fn of steps) {
-      try { return await fn(o); } catch (e) { errors.push(e && e.message ? e.message : String(e)); }
+    try {
+      return await nv.addVolumeFromUrl(url, options);
+    } catch (e) {
+      try {
+        return await nv.addVolumeFromUrl({ url, ...options });
+      } catch (e2) {
+        throw e2;
+      }
     }
-    throw new Error("all-loaders-failed: " + errors.join(" | "));
   }
 
   try {
-    for (const f of files) { await addSmart(f); }
-    nv.volumes.forEach((v, i) => {
+    for (const f of files) {
+      await addCompat(f.url, { name: f.name, colormap: f.colormap, opacity: f.opacity });
+    }
+    nv.volumes.forEach((v) => {
       const meta = files.find(x => x.name === v.name);
-      if (meta) {
-        v.opacity = meta.opacity;
-        if (!meta.isSeg && nv.setColormap) nv.setColormap(v.id, meta.colormap);
-      }
+      if (meta && !meta.isSeg && nv.setColormap) nv.setColormap(v.id, meta.colormap);
     });
     console.log("All volumes loaded.");
   } catch (e) {
