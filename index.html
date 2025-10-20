@@ -1,88 +1,46 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NiiVue – GT vs Prediction Viewer</title>
-  <style>
-    html, body {
-      margin: 0;
-      height: 100%;
-      background: black;
-      overflow: hidden;
-    }
-    canvas {
-      width: 100%;
-      height: 100%;
-      display: block;
-    }
-    #toolbar {
-      position: absolute;
-      top: 10px; left: 10px;
-      background: rgba(0,0,0,0.7);
-      padding: 10px;
-      border-radius: 10px;
-      color: white;
-      font-family: sans-serif;
-      z-index: 10;
-    }
-    label { display: block; margin: 3px 0; cursor: pointer; }
-  </style>
-  <script src="./js/niivue.umd.js"></script>
-</head>
-
-<body>
-  <canvas id="gl"></canvas>
-  <div id="toolbar">
-    <strong>Background</strong>
-    <label><input type="checkbox" id="showBG" checked> Show Base Image</label>
-
-    <hr>
-    <strong>Ground Truth</strong>
-    <label><input type="checkbox" id="gt1" checked> Kidney (1)</label>
-    <label><input type="checkbox" id="gt2" checked> Tumor (2)</label>
-    <label><input type="checkbox" id="gt3" disabled> Cyst (3) – Not present</label>
-
-    <hr>
-    <strong>Prediction</strong>
-    <label><input type="checkbox" id="pr1" checked> Kidney (1)</label>
-    <label><input type="checkbox" id="pr2" checked> Tumor (2)</label>
-    <label><input type="checkbox" id="pr3" disabled> Cyst (3) – Not present</label>
-  </div>
-
 <script>
 window.addEventListener('load', async () => {
   const NiiVueClass = window.Niivue || (window.niivue ? window.niivue.Niivue : undefined);
-  if (!NiiVueClass) { console.error("Niivue failed to load."); return; }
+  const NVImageClass = window.NVImage || (window.niivue ? window.niivue.NVImage : undefined);
+  if (!NiiVueClass || !NVImageClass) {
+    console.error("Niivue or NVImage not found.");
+    return;
+  }
 
   const nv = new NiiVueClass({ show3Dcrosshair: true, isWebGL2: true });
   nv.attachTo('gl');
 
-  const volumes = [
+  const files = [
     { name: "Background", url: "./case_00003/imaging_float32_lowres.nii", colormap: "gray", opacity: 1.0 },
-    { name: "GT Kidney",  url: "./case_00003/segmentation_aligned_lowres.nii", colormap: "red", opacity: 0.6, cal_min: 0.9, cal_max: 1.1 },
-    { name: "GT Tumor",   url: "./case_00003/segmentation_aligned_lowres.nii", colormap: "orange", opacity: 0.6, cal_min: 1.9, cal_max: 2.1 },
-    { name: "PR Kidney",  url: "./case_00003/case_00003_aligned_lowres.nii", colormap: "green", opacity: 0.6, cal_min: 0.9, cal_max: 1.1 },
-    { name: "PR Tumor",   url: "./case_00003/case_00003_aligned_lowres.nii", colormap: "lime", opacity: 0.6, cal_min: 1.9, cal_max: 2.1 }
+    { name: "GT Kidney", url: "./case_00003/segmentation_aligned_lowres.nii", colormap: "red", opacity: 0.6, cal_min: 0.9, cal_max: 1.1 },
+    { name: "GT Tumor", url: "./case_00003/segmentation_aligned_lowres.nii", colormap: "orange", opacity: 0.6, cal_min: 1.9, cal_max: 2.1 },
+    { name: "PR Kidney", url: "./case_00003/case_00003_aligned_lowres.nii", colormap: "green", opacity: 0.6, cal_min: 0.9, cal_max: 1.1 },
+    { name: "PR Tumor", url: "./case_00003/case_00003_aligned_lowres.nii", colormap: "lime", opacity: 0.6, cal_min: 1.9, cal_max: 2.1 }
   ];
 
-  for (const v of volumes) {
+  for (const f of files) {
     try {
-      const res = await fetch(v.url);
+      const res = await fetch(f.url);
       const buf = await res.arrayBuffer();
-      await nv.loadFromArrayBuffer(buf, v);
-      console.log(`Loaded ${v.name}`);
+      const nvImg = await NVImageClass.loadFromArrayBuffer(buf);
+      nvImg.name = f.name;
+      nvImg.colormap = f.colormap || "gray";
+      nvImg.opacity = f.opacity ?? 1.0;
+      if (f.cal_min !== undefined) nvImg.cal_min = f.cal_min;
+      if (f.cal_max !== undefined) nvImg.cal_max = f.cal_max;
+      nv.addVolume(nvImg);
+      console.log("Loaded:", f.name);
     } catch (err) {
-      console.error(`Failed to load ${v.name}`, err);
+      console.error("Failed to load", f.name, err);
     }
   }
 
   const toggle = (id, name) => {
-    const checkbox = document.getElementById(id);
-    checkbox.addEventListener("change", () => {
-      const vol = nv.volumes.find(v => v.name === name);
-      if (vol) {
-        vol.opacity = checkbox.checked ? 0.6 : 0.0;
+    const cb = document.getElementById(id);
+    cb.addEventListener("change", () => {
+      const v = nv.volumes.find(x => x.name === name);
+      if (v) {
+        v.opacity = cb.checked ? (name === "Background" ? 1.0 : 0.6) : 0.0;
         nv.refreshLayers();
       }
     });
@@ -95,5 +53,3 @@ window.addEventListener('load', async () => {
   toggle("pr2", "PR Tumor");
 });
 </script>
-</body>
-</html>
