@@ -61,10 +61,11 @@
       nv.attachTo('gl');
 
       const volumes = [
-        { name: "image", url: "./case_00003/imaging_float32_lowres.nii", colormap: "gray", opacity: 1.0 },
-        { name: "GT", url: "./case_00003/segmentation_aligned_lowres.nii", colormap: "red", opacity: 0.6 },
-        { name: "Pred", url: "./case_00003/case_00003_aligned_lowres.nii", colormap: "green", opacity: 0.6 }
+        { name: "image", url: "https://raw.githubusercontent.com/AmingSong/nii-demo/main/case_00003/imaging_float32_lowres.nii", colormap: "gray", opacity: 1.0 },
+        { name: "GT", url: "https://raw.githubusercontent.com/AmingSong/nii-demo/main/case_00003/segmentation_aligned_lowres.nii", colormap: "red", opacity: 0.6 },
+        { name: "Pred", url: "https://raw.githubusercontent.com/AmingSong/nii-demo/main/case_00003/case_00003_aligned_lowres.nii", colormap: "green", opacity: 0.6 }
       ];
+
 
       try {
         for (const v of volumes) {
