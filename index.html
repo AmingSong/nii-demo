@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NiiVue Viewer – Prediction vs Ground Truth</title>
+  <title>NiiVue Viewer – Ground Truth vs Prediction</title>
 
   <style>
     html, body {
@@ -40,6 +40,7 @@
 
 <body>
   <div id="toolbar">
+    <strong>Display Controls</strong>
     <label><input type="checkbox" id="showGT" checked> Show Ground Truth (Red)</label>
     <label><input type="checkbox" id="showPred" checked> Show Prediction (Green)</label>
   </div>
@@ -50,7 +51,7 @@
     window.addEventListener('load', async () => {
       const NiiVueClass = window.Niivue || (window.niivue ? window.niivue.Niivue : undefined);
       if (!NiiVueClass) {
-        console.error("NiiVue failed to load.");
+        console.error("❌ NiiVue failed to load.");
         return;
       }
 
@@ -60,27 +61,24 @@
       });
       nv.attachTo('gl');
 
+      // === Case_00003 Data (your repo) ===
+      const base = "https://aming-song.github.io/nii-demo/case_00003/";
+
       const volumes = [
-        { name: "image", url: "https://raw.githubusercontent.com/AmingSong/nii-demo/main/case_00003/imaging_float32_lowres.nii", colormap: "gray", opacity: 1.0 },
-        { name: "GT", url: "https://raw.githubusercontent.com/AmingSong/nii-demo/main/case_00003/segmentation_aligned_lowres.nii", colormap: "red", opacity: 0.6 },
-        { name: "Pred", url: "https://raw.githubusercontent.com/AmingSong/nii-demo/main/case_00003/case_00003_aligned_lowres.nii", colormap: "green", opacity: 0.6 }
+        { name: "Image", url: base + "imaging_float32_lowres.nii", colormap: "gray", opacity: 1.0 },
+        { name: "GT", url: base + "segmentation_aligned_lowres.nii", colormap: "red", opacity: 0.6 },
+        { name: "Pred", url: base + "case_00003_aligned_lowres.nii", colormap: "green", opacity: 0.6 }
       ];
 
-
       try {
-        for (const v of volumes) {
-          try {
-            console.log("Loading", v.name, "from", v.url);
-            await nv.loadVolumes([v]);
-          } catch (err) {
-            console.error("Failed to load", v.name, err);
-          }
-        }
-        console.log("Volumes loaded successfully");
+        console.log("Loading all volumes...");
+        await nv.loadVolumes(volumes);
+        console.log("All volumes loaded successfully");
       } catch (err) {
         console.error("Error loading volumes:", err);
       }
 
+      // === UI ===
       document.getElementById("showGT").addEventListener("change", (e) => {
         nv.volumes[1].opacity = e.target.checked ? 0.6 : 0.0;
         nv.updateGLVolume();
