@@ -25,10 +25,8 @@
 </head>
 <body>
   <div id="toolbar">
-    <h3>Layers</h3>
-    <label><input type="checkbox" id="showGT" checked> Show Ground Truth</label>
-    <label><input type="checkbox" id="showPred" checked> Show Prediction</label>
-    <label>Opacity:
+    <h3>Opacity</h3>
+    <label>Mask opacity:
       <input type="range" id="opacity" min="0" max="1" step="0.05" value="0.6">
     </label>
     <hr>
@@ -65,7 +63,6 @@ window.addEventListener('load', async () => {
 
   function absUrl(p) { return new URL(p, window.location.href).toString(); }
 
-  // Adjust base as needed; keep it simple and resolve to absolute URLs.
   let base = "./case_00003/";
   if (!base.endsWith("/")) base += "/";
 
@@ -75,15 +72,13 @@ window.addEventListener('load', async () => {
   console.log("Resolved URLs:", { urlImg, urlGT, urlPred });
 
   try {
-    // Only pass an object with a non-empty url field.
-    await nv.addVolumeFromUrl({ url: urlImg });
-    await nv.addVolumeFromUrl({ url: urlGT  });
+    await nv.addVolumeFromUrl({ url: urlImg  });
+    await nv.addVolumeFromUrl({ url: urlGT   });
     await nv.addVolumeFromUrl({ url: urlPred });
 
-    // Post-config: set names, opacity, and base colormap for the image.
     let img  = nv.volumes[0]; if (img)  { img.name  = "Image"; img.opacity = 1.0; if (nv.setColormap) nv.setColormap(img.id, "gray"); }
-    let gt   = nv.volumes[1]; if (gt)   { gt.name   = "GT";    gt.opacity  = 0.6; }
-    let pred = nv.volumes[2]; if (pred) { pred.name = "Pred";  pred.opacity= 0.6; }
+    let gt   = nv.volumes[1]; if (gt)   { gt.name   = "GT";    gt.opacity  = 0.6; gt.isLabel = true; }
+    let pred = nv.volumes[2]; if (pred) { pred.name = "Pred";  pred.opacity= 0.6; pred.isLabel = true; }
 
     console.log("All volumes loaded.");
   } catch (e) {
@@ -95,21 +90,24 @@ window.addEventListener('load', async () => {
   const idxPred = nv.volumes.findIndex(v => v.name === "Pred");
 
   function makeLabelLUT(a1, a2, a3) {
+    // 1: red, 2: green, 3: blue
     return {
-      R: [0, 0, 255, 255],
-      G: [0, 255, 0, 255],
-      B: [0, 255, 255, 0],
-      A: [0, a1, a2, a3],
-      I: [0, 1, 2, 3],
+      R: [0, 255,   0,   0],
+      G: [0,   0, 255,   0],
+      B: [0,   0,   0, 255],
+      A: [0,  a1,  a2,  a3],
+      I: [0,   1,   2,   3],
       labels: ["background", "kidney", "tumor", "cyst"]
     };
   }
+
   function applyLabelLUT(volIndex, a1, a2, a3) {
     if (volIndex < 0 || !nv.volumes[volIndex]) return;
     const lut = makeLabelLUT(a1, a2, a3);
-    nv.volumes[volIndex].colormapLabel = lut; // v0.36-compatible path
+    nv.volumes[volIndex].colormapLabel = lut;
   }
 
+  // initial LUTs (all labels visible)
   applyLabelLUT(idxGT,   160,160,160);
   applyLabelLUT(idxPred, 160,160,160);
   nv.updateGLVolume();
@@ -123,20 +121,16 @@ window.addEventListener('load', async () => {
     return false;
   }
 
-  const gtCB   = document.getElementById('showGT');
-  const predCB = document.getElementById('showPred');
   const opSL   = document.getElementById('opacity');
 
-  function applyLayerUI() {
+  function applyOpacity() {
     const val = parseFloat(opSL.value);
-    if (idxGT   >= 0) nv.volumes[idxGT].opacity  = gtCB.checked   ? val : 0.0;
-    if (idxPred >= 0) nv.volumes[idxPred].opacity = predCB.checked ? val : 0.0;
+    if (idxGT   >= 0) nv.volumes[idxGT].opacity  = val;
+    if (idxPred >= 0) nv.volumes[idxPred].opacity = val;
     nv.updateGLVolume();
   }
-  gtCB.addEventListener('change', applyLayerUI);
-  predCB.addEventListener('change', applyLayerUI);
-  opSL.addEventListener('input',  applyLayerUI);
-  applyLayerUI();
+  opSL.addEventListener('input', applyOpacity);
+  applyOpacity();
 
   const gtKidney = document.getElementById('gtKidney');
   const gtTumor  = document.getElementById('gtTumor');
@@ -149,10 +143,21 @@ window.addEventListener('load', async () => {
   const predCystNote = document.getElementById('predCystNote');
 
   function applyAllLabelVisibility() {
-    applyLabelLUT(idxGT,   gtKidney.checked ? 160 : 0, gtTumor.checked ? 160 : 0, gtCyst.checked ? 160 : 0);
-    applyLabelLUT(idxPred, predKidney.checked ? 160 : 0, predTumor.checked ? 160 : 0, predCyst.checked ? 160 : 0);
+    applyLabelLUT(
+      idxGT,
+      gtKidney.checked ? 160 : 0,
+      gtTumor.checked  ? 160 : 0,
+      gtCyst.checked   ? 160 : 0
+    );
+    applyLabelLUT(
+      idxPred,
+      predKidney.checked ? 160 : 0,
+      predTumor.checked  ? 160 : 0,
+      predCyst.checked   ? 160 : 0
+    );
     nv.updateGLVolume();
   }
+
   gtKidney.addEventListener('change', applyAllLabelVisibility);
   gtTumor .addEventListener('change', applyAllLabelVisibility);
   gtCyst  .addEventListener('change', applyAllLabelVisibility);
