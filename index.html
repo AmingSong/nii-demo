@@ -3,18 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NiiVue – Fixed Volume Loader</title>
+  <title>NiiVue – Robust Loader (Debug Mode)</title>
   <style>
     html, body { margin: 0; height: 100%; background: black; overflow: hidden; }
     #toolbar {
-      position: absolute;
-      top: 10px; left: 10px;
+      position: absolute; top: 10px; left: 10px;
       background: rgba(0,0,0,0.7);
-      padding: 10px;
-      border-radius: 10px;
-      color: white;
-      font-family: sans-serif;
-      z-index: 10;
+      padding: 10px; border-radius: 10px; color: white;
+      font-family: sans-serif; z-index: 10;
     }
     label { display: block; margin: 3px 0; }
     canvas { width: 100%; height: 100%; display: block; }
@@ -42,27 +38,62 @@
   <script>
     window.addEventListener('load', async () => {
       const NiiVueClass = window.Niivue || (window.niivue ? window.niivue.Niivue : undefined);
-      if (!NiiVueClass) { console.error("❌ NiiVue failed to load."); return; }
+      if (!NiiVueClass) { console.error("NiiVue failed to load."); return; }
 
       const nv = new NiiVueClass({ show3Dcrosshair: true, isWebGL2: true });
       nv.attachTo('gl');
 
+      // === 定义 volume 列表 ===
       const vols = [
-        { name: "Background", url: "./case_00003/imaging_float32_lowres.nii", colormap: "gray", opacity: 1.0 },
-        { name: "GT Kidney", url: "./case_00003/segmentation_aligned_lowres.nii", colormap: "red", opacity: 0.6, cal_min: 0.9, cal_max: 1.1 },
-        { name: "GT Tumor",  url: "./case_00003/segmentation_aligned_lowres.nii", colormap: "orange", opacity: 0.6, cal_min: 1.9, cal_max: 2.1 },
-        { name: "PR Kidney", url: "./case_00003/case_00003_aligned_lowres.nii", colormap: "green", opacity: 0.6, cal_min: 0.9, cal_max: 1.1 },
-        { name: "PR Tumor",  url: "./case_00003/case_00003_aligned_lowres.nii", colormap: "lime", opacity: 0.6, cal_min: 1.9, cal_max: 2.1 }
+        {
+          name: "Background",
+          url: "./case_00003/imaging_float32_lowres.nii",
+          colormap: "gray",
+          opacity: 1.0
+        },
+        {
+          name: "GT Kidney",
+          url: "./case_00003/segmentation_aligned_lowres.nii",
+          colormap: "red",
+          opacity: 0.6,
+          cal_min: 0.9,
+          cal_max: 1.1
+        },
+        {
+          name: "GT Tumor",
+          url: "./case_00003/segmentation_aligned_lowres.nii",
+          colormap: "orange",
+          opacity: 0.6,
+          cal_min: 1.9,
+          cal_max: 2.1
+        },
+        {
+          name: "PR Kidney",
+          url: "./case_00003/case_00003_aligned_lowres.nii",
+          colormap: "green",
+          opacity: 0.6,
+          cal_min: 0.9,
+          cal_max: 1.1
+        },
+        {
+          name: "PR Tumor",
+          url: "./case_00003/case_00003_aligned_lowres.nii",
+          colormap: "lime",
+          opacity: 0.6,
+          cal_min: 1.9,
+          cal_max: 2.1
+        }
       ];
 
-      try {
-        await nv.loadVolumes(vols);
-        console.log("Loaded all volumes successfully");
-      } catch (err) {
-        console.error("Error loading volumes:", err);
+      for (const v of vols) {
+        try {
+          console.log(`Loading ${v.name} from ${v.url}`);
+          await nv.addVolumeFromUrl(v);
+        } catch (err) {
+          console.error(`Error loading ${v.name} (${v.url})`, err);
+        }
       }
 
-      // === toggle control ===
       const toggle = (id, name) => {
         const cb = document.getElementById(id);
         cb.addEventListener("change", () => {
@@ -79,6 +110,8 @@
       toggle("gt2", "GT Tumor");
       toggle("pr1", "PR Kidney");
       toggle("pr2", "PR Tumor");
+
+      console.log("Finished loading all volumes");
     });
   </script>
 </body>
