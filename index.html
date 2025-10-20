@@ -4,23 +4,21 @@
   <meta charset="UTF-8" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NiiVue Viewer – GT vs Prediction (Labels 1/2/3)</title>
+  <title>NiiVue Viewer – GT vs Prediction (Per-layer Labels 1/2/3)</title>
   <style>
     html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
     #toolbar {
       position: absolute; top: 10px; left: 10px; z-index: 10;
       background: rgba(0,0,0,0.72); color: #fff; font-family: system-ui, sans-serif; font-size: 14px;
-      padding: 12px; border-radius: 12px; min-width: 260px;
+      padding: 12px; border-radius: 12px; min-width: 320px;
       box-shadow: 0 4px 16px rgba(0,0,0,0.35);
     }
     #toolbar h3 { margin: 0 0 8px; font-size: 15px; }
     #toolbar label { display: block; margin: 6px 0; cursor: pointer; }
     #toolbar hr { border: none; border-top: 1px solid rgba(255,255,255,0.12); margin: 10px 0; }
     .hint { color: #bbb; font-size: 12px; }
-    .badge { display:inline-block; padding:1px 6px; border-radius: 8px; margin-left:6px; font-size:12px; }
-    .badge.kidney { background:#00ffff22; border:1px solid #00ffff55; color:#aef; }
-    .badge.tumor  { background:#ff00ff22; border:1px solid #ff00ff55; color:#faf; }
-    .badge.cyst   { background:#ffff0022; border:1px solid #ffff0055; color:#ff6; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; }
+    .section { margin-top: 6px; padding: 6px 8px; background: rgba(255,255,255,0.06); border-radius: 8px; }
     canvas { width: 100%; height: 100%; display: block; }
   </style>
   <script src="./js/niivue.umd.js"></script>
@@ -34,20 +32,25 @@
       <input type="range" id="opacity" min="0" max="1" step="0.05" value="0.6">
     </label>
     <hr>
-    <h3>Labels (discrete LUT)</h3>
-    <label>
-      <input type="checkbox" id="lblKidney" checked>
-      1 · kidney <span class="badge kidney">cyan</span>
-    </label>
-    <label>
-      <input type="checkbox" id="lblTumor"  checked>
-      2 · tumor <span class="badge tumor">magenta</span>
-    </label>
-    <label>
-      <input type="checkbox" id="lblCyst"   checked>
-      3 · cyst <span class="badge cyst">yellow</span>
-      <span id="cystNote" class="hint"></span>
-    </label>
+    <div class="section">
+      <h3>GT labels</h3>
+      <div class="row">
+        <label><input type="checkbox" id="gtKidney" checked> 1 · kidney</label>
+        <label><input type="checkbox" id="gtTumor"  checked> 2 · tumor</label>
+        <label><input type="checkbox" id="gtCyst"   checked> 3 · cyst <span id="gtCystNote" class="hint"></span></label>
+      </div>
+    </div>
+    <div class="section">
+      <h3>Pred labels</h3>
+      <div class="row">
+        <label><input type="checkbox" id="predKidney" checked> 1 · kidney</label>
+        <label><input type="checkbox" id="predTumor"  checked> 2 · tumor</label>
+        <label><input type="checkbox" id="predCyst"   checked> 3 · cyst <span id="predCystNote" class="hint"></span></label>
+      </div>
+    </div>
+    <div class="hint" style="margin-top:8px;">
+      Tip: if a label is absent in GT or Pred, its checkbox is disabled for that layer only.
+    </div>
   </div>
 
   <canvas id="gl"></canvas>
@@ -63,46 +66,69 @@ window.addEventListener('load', async () => {
   const nv = new NiiVueClass({
     show3Dcrosshair: true,
     isWebGL2: true,
-    logging: true,
+    logging: true
   });
   nv.attachTo('gl');
 
   const base = "./case_00003/";
 
-  const baseLabelLUT = {
-    R: [  0,   0, 255, 255],
-    G: [  0, 255,   0, 255],
-    B: [  0, 255, 255,   0],
-    A: [  0, 160, 160, 160],
-    I: [  0,   1,   2,   3],
-    labels: ["background", "kidney", "tumor", "cyst"],
-  };
-
-  function cloneLUT(lut) {
+  function makeLabelLUT(alpha1, alpha2, alpha3) {
     return {
-      R: [...lut.R], G: [...lut.G], B: [...lut.B], A: [...lut.A], I: [...lut.I],
-      labels: [...lut.labels]
+      R: [  0,   0, 255, 255],
+      G: [  0, 255,   0, 255],
+      B: [  0, 255, 255,   0],
+      A: [  0, alpha1, alpha2, alpha3],
+      I: [  0,   1,    2,     3],
+      labels: ["background", "kidney", "tumor", "cyst"]
     };
   }
 
-  const volumes = [
-    { url: base + "imaging_float32_lowres.nii",      name: "Image", colormap: "gray", opacity: 1.0 },
-    { url: base + "segmentation_aligned_lowres.nii", name: "GT",    colormap: "gray", opacity: 0.6, colormapLabel: cloneLUT(baseLabelLUT) },
-    { url: base + "case_00003_aligned_lowres.nii",   name: "Pred",  colormap: "gray", opacity: 0.6, colormapLabel: cloneLUT(baseLabelLUT) },
-  ];
+  let idxImage = -1, idxGT = -1, idxPred = -1;
+
+  async function loadOneVolume(opts) {
+    return nv.addVolumeFromUrl(opts);
+  }
 
   try {
-    await nv.loadImages(volumes);
+    const img = await loadOneVolume({ url: base + "imaging_float32_lowres.nii", name: "Image", colormap: "gray", opacity: 1.0 });
+    const gt  = await loadOneVolume({ url: base + "segmentation_aligned_lowres.nii", name: "GT", colormap: "gray", opacity: 0.6 });
+    const pr  = await loadOneVolume({ url: base + "case_00003_aligned_lowres.nii",   name: "Pred", colormap: "gray", opacity: 0.6 });
+
+    nv.volumes.forEach((v, i) => {
+      if (v.name === "Image") idxImage = i;
+      if (v.name === "GT")    idxGT = i;
+      if (v.name === "Pred")  idxPred = i;
+    });
+
+    if (idxGT >= 0) {
+      if (typeof nv.volumes[idxGT].setColormapLabel === "function") {
+        nv.volumes[idxGT].setColormapLabel(makeLabelLUT(160,160,160));
+      } else {
+        nv.volumes[idxGT].colormapLabel = makeLabelLUT(160,160,160);
+      }
+    }
+    if (idxPred >= 0) {
+      if (typeof nv.volumes[idxPred].setColormapLabel === "function") {
+        nv.volumes[idxPred].setColormapLabel(makeLabelLUT(160,160,160));
+      } else {
+        nv.volumes[idxPred].colormapLabel = makeLabelLUT(160,160,160);
+      }
+    }
+    nv.updateGLVolume();
   } catch (e) {
-    console.error("Failed to load images:", e);
+    console.error("Failed to load volumes:", e);
     return;
   }
 
-  const name2idx = {};
-  nv.volumes.forEach((v, i) => { name2idx[v.name] = i; });
-  const idxImage = name2idx["Image"];
-  const idxGT    = name2idx["GT"];
-  const idxPred  = name2idx["Pred"];
+  async function hasLabel(iVol, value) {
+    const v = nv.volumes[iVol];
+    if (!v || !v.img) return false;
+    const data = v.img;
+    for (let k = 0; k < data.length; k++) {
+      if (data[k] === value) return true;
+    }
+    return false;
+  }
 
   const gtCB   = document.getElementById('showGT');
   const predCB = document.getElementById('showPred');
@@ -110,8 +136,8 @@ window.addEventListener('load', async () => {
 
   function applyLayerUI() {
     const val = parseFloat(opSL.value);
-    if (Number.isFinite(idxGT))   nv.volumes[idxGT].opacity  = gtCB.checked   ? val : 0.0;
-    if (Number.isFinite(idxPred)) nv.volumes[idxPred].opacity = predCB.checked ? val : 0.0;
+    if (idxGT   >= 0) nv.volumes[idxGT].opacity  = gtCB.checked   ? val : 0.0;
+    if (idxPred >= 0) nv.volumes[idxPred].opacity = predCB.checked ? val : 0.0;
     nv.updateGLVolume();
   }
   gtCB.addEventListener('change', applyLayerUI);
@@ -119,52 +145,61 @@ window.addEventListener('load', async () => {
   opSL.addEventListener('input',  applyLayerUI);
   applyLayerUI();
 
-  const lblKidney = document.getElementById('lblKidney');
-  const lblTumor  = document.getElementById('lblTumor');
-  const lblCyst   = document.getElementById('lblCyst');
+  const gtKidney = document.getElementById('gtKidney');
+  const gtTumor  = document.getElementById('gtTumor');
+  const gtCyst   = document.getElementById('gtCyst');
+  const gtCystNote = document.getElementById('gtCystNote');
 
-  function applyLabelVisibility() {
-    const A = [
-      0,
-      lblKidney.checked ? 160 : 0,
-      lblTumor.checked  ? 160 : 0,
-      lblCyst.checked   ? 160 : 0,
-    ];
-    const lut = cloneLUT(baseLabelLUT);
-    lut.A = A;
-    [idxGT, idxPred].forEach(i => {
-      if (Number.isFinite(i) && nv.volumes[i]) {
-        nv.volumes[i].colormapLabel = lut;
+  const predKidney = document.getElementById('predKidney');
+  const predTumor  = document.getElementById('predTumor');
+  const predCyst   = document.getElementById('predCyst');
+  const predCystNote = document.getElementById('predCystNote');
+
+  async function initLabelPresence() {
+    if (idxGT >= 0) {
+      const exist3 = await hasLabel(idxGT, 3);
+      if (!exist3) {
+        gtCyst.checked = false;
+        gtCyst.disabled = true;
+        gtCystNote.textContent = " (no cyst in GT)";
       }
-    });
+    }
+    if (idxPred >= 0) {
+      const exist3 = await hasLabel(idxPred, 3);
+      if (!exist3) {
+        predCyst.checked = false;
+        predCyst.disabled = true;
+        predCystNote.textContent = " (no cyst in Pred)";
+      }
+    }
+  }
+
+  function applyLabelVisibilityFor(volIndex, kidneyOn, tumorOn, cystOn) {
+    const lut = makeLabelLUT(kidneyOn ? 160 : 0, tumorOn ? 160 : 0, cystOn ? 160 : 0);
+    if (volIndex >= 0) {
+      if (typeof nv.volumes[volIndex].setColormapLabel === "function") {
+        nv.volumes[volIndex].setColormapLabel(lut);
+      } else {
+        nv.volumes[volIndex].colormapLabel = lut;
+      }
+    }
+  }
+
+  function applyAllLabelVisibility() {
+    applyLabelVisibilityFor(idxGT,   gtKidney.checked,  gtTumor.checked,  gtCyst.checked);
+    applyLabelVisibilityFor(idxPred, predKidney.checked, predTumor.checked, predCyst.checked);
     nv.updateGLVolume();
   }
-  lblKidney.addEventListener('change', applyLabelVisibility);
-  lblTumor .addEventListener('change', applyLabelVisibility);
-  lblCyst  .addEventListener('change', applyLabelVisibility);
-  applyLabelVisibility();
 
-  async function volumeHasLabel(iVol, target) {
-    const v = nv.volumes[iVol];
-    if (!v || !v.img) return false;
-    const data = v.img;
-    for (let k = 0; k < data.length; k++) {
-      if (data[k] === target) return true;
-    }
-    return false;
-  }
+  gtKidney.addEventListener('change', applyAllLabelVisibility);
+  gtTumor .addEventListener('change', applyAllLabelVisibility);
+  gtCyst  .addEventListener('change', applyAllLabelVisibility);
+  predKidney.addEventListener('change', applyAllLabelVisibility);
+  predTumor .addEventListener('change', applyAllLabelVisibility);
+  predCyst  .addEventListener('change', applyAllLabelVisibility);
 
-  const cystNote = document.getElementById('cystNote');
-  const cystExistGT   = Number.isFinite(idxGT)   ? await volumeHasLabel(idxGT,   3) : false;
-  const cystExistPred = Number.isFinite(idxPred) ? await volumeHasLabel(idxPred, 3) : false;
-  const cystExists = cystExistGT || cystExistPred;
-
-  if (!cystExists) {
-    lblCyst.checked = false;
-    lblCyst.disabled = true;
-    cystNote.textContent = " (no cyst in this case)";
-    applyLabelVisibility();
-  }
+  await initLabelPresence();
+  applyAllLabelVisibility();
 });
 </script>
 </body>
