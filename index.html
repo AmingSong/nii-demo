@@ -2,8 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NiiVue Viewer – GT vs Prediction (Fixed for GitHub Pages)</title>
+  <title>NiiVue Viewer – GT vs Prediction</title>
+
   <style>
     html, body {
       margin: 0;
@@ -22,17 +24,11 @@
       color: white;
       font-family: sans-serif;
     }
-    label {
-      display: block;
-      margin: 6px 0;
-      cursor: pointer;
-    }
-    canvas {
-      width: 100%;
-      height: 100%;
-      display: block;
-    }
+    label { display: block; margin: 6px 0; cursor: pointer; }
+    canvas { width: 100%; height: 100%; display: block; }
   </style>
+
+  <!-- 确保该文件存在： /js/niivue.umd.js -->
   <script src="./js/niivue.umd.js"></script>
 </head>
 
@@ -48,53 +44,68 @@
 
   <script>
     window.addEventListener('load', async () => {
-      console.log("Initializing NiiVue...");
-      const nv = new niivue.Niivue({ show3Dcrosshair: true });
+      // 取 Niivue / NVImage 类（UMD 0.36.0）
+      const NiiVueClass  = window.Niivue  || (window.niivue ? window.niivue.Niivue  : undefined);
+      const NVImageClass = window.NVImage || (window.niivue ? window.niivue.NVImage : undefined);
+      if (!NiiVueClass || !NVImageClass) {
+        console.error("Niivue UMD not found. Check ./js/niivue.umd.js is served correctly.");
+        return;
+      }
+
+      // 初始化并挂载
+      const nv = new NiiVueClass({ show3Dcrosshair: true, isWebGL2: true });
       nv.attachTo('gl');
 
+      // 相对路径（与你的仓库结构一致）
       const base = "./case_00003/";
       const files = [
-        { name: "Image", file: "imaging_float32_lowres.nii", colormap: "gray", opacity: 1.0 },
-        { name: "GT", file: "segmentation_aligned_lowres.nii", colormap: "red", opacity: 0.6 },
-        { name: "Pred", file: "case_00003_aligned_lowres.nii", colormap: "green", opacity: 0.6 }
+        { name: "Image", file: "imaging_float32_lowres.nii",     colormap: "gray",  opacity: 1.0 },
+        { name: "GT",    file: "segmentation_aligned_lowres.nii", colormap: "red",   opacity: 0.6 },
+        { name: "Pred",  file: "case_00003_aligned_lowres.nii",   colormap: "green", opacity: 0.6 }
       ];
 
-      const volumes = [];
-
+      // 逐个 fetch → ArrayBuffer → NVImage 实例.loadFromArrayBuffer(buf) → addVolume
       for (const f of files) {
         try {
           console.log("Fetching", f.file);
           const res = await fetch(base + f.file);
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          if (!res.ok) throw new Error("HTTP " + res.status);
+
           const buf = await res.arrayBuffer();
-          const nii = await niivue.NVImage.loadFromArrayBuffer(buf);
-          nii.colormap = f.colormap;
-          nii.opacity = f.opacity;
-          volumes.push(nii);
+
+          // 注意：在 UMD 0.36.0 中使用“实例方法”而非静态方法
+          const nvImg = new NVImageClass();
+          await nvImg.loadFromArrayBuffer(buf);
+
+          nvImg.name     = f.name;
+          nvImg.colormap = f.colormap;
+          nvImg.opacity  = f.opacity;
+
+          nv.addVolume(nvImg);
           console.log("Loaded", f.file);
-        } catch (err) {
-          console.error("Failed to load", f.file, err);
+        } catch (e) {
+          console.error("Failed to load", f.file, e);
         }
       }
 
-      await nv.addVolumes(volumes);
-      console.log("All volumes added successfully.");
+      // 简单 UI：切换显示与透明度
+      const gtCB   = document.getElementById('showGT');
+      const predCB = document.getElementById('showPred');
+      const opSL   = document.getElementById('opacity');
 
-      // === UI ===
-      const opacitySlider = document.getElementById("opacity");
-      const gtCheckbox = document.getElementById("showGT");
-      const predCheckbox = document.getElementById("showPred");
-
-      function updateOpacity() {
-        const val = parseFloat(opacitySlider.value);
-        if (nv.volumes[1]) nv.volumes[1].opacity = gtCheckbox.checked ? val : 0.0;
-        if (nv.volumes[2]) nv.volumes[2].opacity = predCheckbox.checked ? val : 0.0;
+      function applyUI() {
+        const val = parseFloat(opSL.value);
+        if (nv.volumes[1]) nv.volumes[1].opacity = gtCB.checked   ? val : 0.0;   // GT
+        if (nv.volumes[2]) nv.volumes[2].opacity = predCB.checked ? val : 0.0;   // Pred
         nv.updateGLVolume();
       }
 
-      gtCheckbox.addEventListener("change", updateOpacity);
-      predCheckbox.addEventListener("change", updateOpacity);
-      opacitySlider.addEventListener("input", updateOpacity);
+      gtCB.addEventListener('change', applyUI);
+      predCB.addEventListener('change', applyUI);
+      opSL.addEventListener('input', applyUI);
+
+      // 初次应用一次
+      applyUI();
     });
   </script>
 </body>
