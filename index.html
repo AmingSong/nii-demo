@@ -17,7 +17,6 @@
     canvas { width: 100%; height: 100%; display: block; }
   </style>
 
-  <!-- 确保此路径正确、文件存在且可被静态服务器访问 -->
   <script src="./js/niivue.umd.js"></script>
 </head>
 
@@ -38,32 +37,29 @@ window.addEventListener('load', async () => {
 
   const base = "./case_00003/";
 
-  // 明确写上 name 且带扩展名（老版本更稳）
   const vols = [
     { url: base + "imaging_float32_lowres.nii",      name: "imaging_float32_lowres.nii",      colormap: "gray",   opacity: 1.0 },
     { url: base + "segmentation_aligned_lowres.nii", name: "segmentation_aligned_lowres.nii", colormap: "warm",   opacity: 0.6 },
-    { url: base + "case_00003_aligned_lowres.nii",   name: "case_00003_aligned_lowres.nii",   colormap: "viridis",opacity: 0.6 },
+    { url: base + "case_00003_aligned_lowres.nii",   name: "case_00003_aligned_lowres.nii",   colormap: "cool",opacity: 0.6 },
   ];
 
-  // 预检：任何一项 url 不是字符串都直接抛出
   vols.forEach((v, i) => {
     if (typeof v.url !== 'string' || !v.url.length) {
-      throw new TypeError(`volume[${i}] 的 url 非字符串或为空：${v.url}`);
+      throw new TypeError(`volume[${i}] 的 url is empty：${v.url}`);
     }
     if (!/\.(nii|nii\.gz|nrrd|mgh|mgz)$/i.test(v.url) && !/\.(nii|nii\.gz|nrrd|mgh|mgz)$/i.test(v.name || '')) {
-      console.warn(`volume[${i}] 缺少可识别扩展名（将用 name 兜底）：url=${v.url} name=${v.name}`);
+      console.warn(`volume[${i}] ：url=${v.url} name=${v.name}`);
     }
   });
 
-  // 逐个加载以 pinpoint 到具体出错对象
   async function safeAdd(o, idx) {
     try {
       console.log(`Loading [${idx}]`, o);
-      await nv.addVolumeFromUrl(o); // 或换成 nv.loadVolumes([o]) 逐个
+      await nv.addVolumeFromUrl(o);
       console.log(`Loaded [${idx}] OK`);
     } catch (e) {
       console.error(`❌ Failed at volume[${idx}]`, o, e);
-      throw e; // 停在第一个坏的
+      throw e;
     }
   }
 
@@ -71,7 +67,6 @@ window.addEventListener('load', async () => {
     await safeAdd(vols[i], i);
   }
 
-  // —— UI 同你原来一致 ——
   const gtCB   = document.getElementById('showGT');
   const predCB = document.getElementById('showPred');
   const opSL   = document.getElementById('opacity');
