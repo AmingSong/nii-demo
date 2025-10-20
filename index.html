@@ -5,7 +5,6 @@
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>NiiVue Viewer – GT vs Prediction (Labels 1/2/3)</title>
-
   <style>
     html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
     #toolbar {
@@ -24,8 +23,6 @@
     .badge.cyst   { background:#ffff0022; border:1px solid #ffff0055; color:#ff6; }
     canvas { width: 100%; height: 100%; display: block; }
   </style>
-
-  <!-- 确保此文件路径正确可访问（建议固定你本地的 niivue 版本） -->
   <script src="./js/niivue.umd.js"></script>
 </head>
 <body>
@@ -36,9 +33,7 @@
     <label>Opacity:
       <input type="range" id="opacity" min="0" max="1" step="0.05" value="0.6">
     </label>
-
     <hr>
-
     <h3>Labels (discrete LUT)</h3>
     <label>
       <input type="checkbox" id="lblKidney" checked>
@@ -53,10 +48,6 @@
       3 · cyst <span class="badge cyst">yellow</span>
       <span id="cystNote" class="hint"></span>
     </label>
-
-    <div class="hint" style="margin-top:8px;">
-      提示：若本例不存在某个标签，按钮会自动禁用。
-    </div>
   </div>
 
   <canvas id="gl"></canvas>
@@ -72,25 +63,21 @@ window.addEventListener('load', async () => {
   const nv = new NiiVueClass({
     show3Dcrosshair: true,
     isWebGL2: true,
-    logging: true,      // 控制台输出
+    logging: true,
   });
   nv.attachTo('gl');
 
-  // ---- 配置你的数据路径 ----
   const base = "./case_00003/";
 
-  // ===== 离散标签 LUT（0 背景透明；1/2/3 分别上色） =====
-  // 颜色方案：1=kidney=青色、2=tumor=洋红、3=cyst=黄色（半透明）
   const baseLabelLUT = {
     R: [  0,   0, 255, 255],
     G: [  0, 255,   0, 255],
     B: [  0, 255, 255,   0],
-    A: [  0, 160, 160, 160],  // 透明度：0=隐藏；160=半透明
-    I: [  0,   1,   2,   3],  // 离散标签值
+    A: [  0, 160, 160, 160],
+    I: [  0,   1,   2,   3],
     labels: ["background", "kidney", "tumor", "cyst"],
   };
 
-  // 深拷贝 LUT（避免引用同一对象）
   function cloneLUT(lut) {
     return {
       R: [...lut.R], G: [...lut.G], B: [...lut.B], A: [...lut.A], I: [...lut.I],
@@ -98,16 +85,12 @@ window.addEventListener('load', async () => {
     };
   }
 
-  // ===== 预构建：图层条目（GT/Pred 使用相同的离散 LUT） =====
   const volumes = [
     { url: base + "imaging_float32_lowres.nii",      name: "Image", colormap: "gray", opacity: 1.0 },
     { url: base + "segmentation_aligned_lowres.nii", name: "GT",    colormap: "gray", opacity: 0.6, colormapLabel: cloneLUT(baseLabelLUT) },
     { url: base + "case_00003_aligned_lowres.nii",   name: "Pred",  colormap: "gray", opacity: 0.6, colormapLabel: cloneLUT(baseLabelLUT) },
   ];
 
-  // ===== 加载（按扩展名识别类型的通用方法） =====
-  // 文档：loadImages 会根据 URL/name 的扩展名判断 NII/NRRD/mesh 等类型
-  // https://niivue.com/docs/loading/
   try {
     await nv.loadImages(volumes);
   } catch (e) {
@@ -115,14 +98,12 @@ window.addEventListener('load', async () => {
     return;
   }
 
-  // 建立名字到索引的映射，避免写死顺序
   const name2idx = {};
   nv.volumes.forEach((v, i) => { name2idx[v.name] = i; });
   const idxImage = name2idx["Image"];
   const idxGT    = name2idx["GT"];
   const idxPred  = name2idx["Pred"];
 
-  // ======== UI：图层显隐与透明度 ========
   const gtCB   = document.getElementById('showGT');
   const predCB = document.getElementById('showPred');
   const opSL   = document.getElementById('opacity');
@@ -138,7 +119,6 @@ window.addEventListener('load', async () => {
   opSL.addEventListener('input',  applyLayerUI);
   applyLayerUI();
 
-  // ======== UI：离散标签开关（更改 A 通道实现可见性切换） ========
   const lblKidney = document.getElementById('lblKidney');
   const lblTumor  = document.getElementById('lblTumor');
   const lblCyst   = document.getElementById('lblCyst');
@@ -146,17 +126,14 @@ window.addEventListener('load', async () => {
   function applyLabelVisibility() {
     const A = [
       0,
-      lblKidney.checked ? 160 : 0,  // label 1
-      lblTumor.checked  ? 160 : 0,  // label 2
-      lblCyst.checked   ? 160 : 0,  // label 3
+      lblKidney.checked ? 160 : 0,
+      lblTumor.checked  ? 160 : 0,
+      lblCyst.checked   ? 160 : 0,
     ];
     const lut = cloneLUT(baseLabelLUT);
     lut.A = A;
-
-    // 给 GT/Pred 两个分割体分别更新其 colormapLabel
     [idxGT, idxPred].forEach(i => {
       if (Number.isFinite(i) && nv.volumes[i]) {
-        // 直接更新 NVImage 的 colormapLabel 字段是被支持的
         nv.volumes[i].colormapLabel = lut;
       }
     });
@@ -167,14 +144,10 @@ window.addEventListener('load', async () => {
   lblCyst  .addEventListener('change', applyLabelVisibility);
   applyLabelVisibility();
 
-  // ======== 自动检测是否存在 label=3（cyst） ========
-  // NVImage 暴露了体素数据与尺寸信息（见 index.d.ts：img、dimsRAS 等）
-  // https://cdn.jsdelivr.net/npm/@niivue/niivue@0.52.0/dist/index.d.ts
   async function volumeHasLabel(iVol, target) {
     const v = nv.volumes[iVol];
     if (!v || !v.img) return false;
-    const data = v.img; // Typed array
-    // 线性扫描（分割通常是小整数标签，判断非常快）
+    const data = v.img;
     for (let k = 0; k < data.length; k++) {
       if (data[k] === target) return true;
     }
@@ -189,14 +162,9 @@ window.addEventListener('load', async () => {
   if (!cystExists) {
     lblCyst.checked = false;
     lblCyst.disabled = true;
-    cystNote.textContent = "（本例无 cyst）";
+    cystNote.textContent = " (no cyst in this case)";
     applyLabelVisibility();
   }
-
-  // ======== 备用：如需切换连续 colormap，可用 setColormap(volumeId, 'viridis') 等 ========
-  // https://niivue.com/docs/colormaps/
-  // const volIdGT   = nv.volumes[idxGT].id;
-  // nv.setColormap(volIdGT, 'inferno');
 });
 </script>
 </body>
