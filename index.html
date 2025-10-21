@@ -124,7 +124,10 @@ window.addEventListener('load', async () => {
   function applyLabelLUTStrict(volIndex, palette, a1, a2, a3) {
     const vol = nv.volumes[volIndex];
     if (!vol) return;
-    const lut = palette === "warm" ? warmLUT(a1, a2, a3) : coolLUT(a1, a2, a3);
+    const lut = (palette === "warm") ? warmLUT(a1, a2, a3) : coolLUT(a1, a2, a3);
+
+    // Important: switch to label mode before assigning the LUT
+    vol.isLabel = true;
 
     if (typeof nv.setColormapLabel === "function") {
       nv.setColormapLabel(vol.id, lut);
@@ -133,19 +136,20 @@ window.addEventListener('load', async () => {
       vol.colorMapLabel = lut;
     }
 
+    // Keep a valid string colormap; do not set null
     if (!vol.colormap) {
       if (vol.name === "GT")   vol.colormap = "warm";
       if (vol.name === "Pred") vol.colormap = "cool";
     }
 
+    // Refresh colormap textures and then redraw
     refreshColorStuff();
-    vol.isLabel = true;
+    nv.updateGLVolume();
   }
 
+  // Initial LUTs (all labels visible)
   applyLabelLUTStrict(idxGT,   "warm", 160,160,160);
   applyLabelLUTStrict(idxPred, "cool", 160,160,160);
-  refreshColorStuff();
-  nv.updateGLVolume();
 
   async function hasLabel(iVol, value) {
     const v = nv.volumes[iVol];
@@ -194,8 +198,6 @@ window.addEventListener('load', async () => {
       predTumor.checked  ? 160 : 0,
       predCyst.checked   ? 160 : 0
     );
-    refreshColorStuff();
-    nv.updateGLVolume();
   }
 
   gtKidney.addEventListener('change', applyAllLabelVisibility);
