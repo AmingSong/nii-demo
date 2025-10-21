@@ -146,9 +146,10 @@ window.addEventListener('load', async () => {
     };
   }
 
+  // Safer refresh: avoid refreshLayers() which may touch volumes without hdr yet
   function refreshColorStuff() {
-    if (typeof nv.refreshLayers === "function") nv.refreshLayers();
-    else if (typeof nv.refreshColormaps === "function") nv.refreshColormaps();
+    if (typeof nv.refreshColormaps === "function") nv.refreshColormaps();
+    nv.updateGLVolume();
   }
 
   function applyLabelLUT(volIndex, palette, a1, a2, a3) {
@@ -157,8 +158,8 @@ window.addEventListener('load', async () => {
 
     const lut = (palette === "warm") ? warmLUT(a1,a2,a3) : coolLUT(a1,a2,a3);
 
-    vol.isLabel = true;                                  // enable label mode
-    vol.colormap = (palette === "warm") ? "warm" : "cool"; // keep a valid string colormap
+    vol.isLabel = true;                                   // label rendering path
+    vol.colormap = (palette === "warm") ? "warm" : "cool"; // keep a valid string
 
     if (typeof nv.setColormapLabel === "function") {
       nv.setColormapLabel(vol.id, lut);
@@ -167,8 +168,7 @@ window.addEventListener('load', async () => {
       vol.colorMapLabel = lut;
     }
 
-    refreshColorStuff();
-    nv.updateGLVolume();
+    refreshColorStuff(); // rebuild colormap textures (safe path) and redraw
   }
 
   // global layer controls
@@ -226,7 +226,7 @@ window.addEventListener('load', async () => {
     return false;
   }
 
-  // initialize: disable cyst if missing; then apply visibility once
+  // Defer first application one frame to ensure textures are fully ready
   (async () => {
     if (idxGT >= 0) {
       const exist3 = await hasLabel(idxGT, 3);
@@ -236,7 +236,7 @@ window.addEventListener('load', async () => {
       const exist3 = await hasLabel(idxPred, 3);
       if (!exist3) { predCyst.checked = false; predCyst.disabled = true; predCystNote.textContent = " (no cyst in Pred)"; }
     }
-    applyAllLabelVisibility();
+    requestAnimationFrame(applyAllLabelVisibility);
   })();
 });
 </script>
