@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NiiVue Viewer – GT (warm labels) vs Pred (cool labels) + per-label toggles</title>
+  <title>NiiVue Viewer – GT (warm labels) vs Pred (cool labels)</title>
   <style>
     html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
     #toolbar {
@@ -53,7 +53,7 @@
     </div>
 
     <div class="hint" style="margin-top:8px;">
-      Layer toggles control whole masks; per-label toggles change label LUT alpha (1/2/3).
+      Layer toggles control whole masks; per-label checkboxes toggle labels 1/2/3 via LUT alpha.
     </div>
   </div>
 
@@ -83,8 +83,8 @@ window.addEventListener('load', async () => {
     await nv.addVolumeFromUrl({ url: urlPred });
 
     let img  = nv.volumes[0]; if (img)  { img.name  = "Image"; img.opacity = 1.0; if (nv.setColormap) nv.setColormap(img.id, "gray"); }
-    let gt   = nv.volumes[1]; if (gt)   { gt.name   = "GT";    gt.opacity  = 0.6; }
-    let pred = nv.volumes[2]; if (pred) { pred.name = "Pred";  pred.opacity= 0.6; }
+    let gt   = nv.volumes[1]; if (gt)   { gt.name   = "GT";    gt.opacity  = 0.6; if (nv.setColormap) nv.setColormap(gt.id,   "warm"); }
+    let pred = nv.volumes[2]; if (pred) { pred.name = "Pred";  pred.opacity= 0.6; if (nv.setColormap) nv.setColormap(pred.id, "cool"); }
 
     console.log("All volumes loaded.");
   } catch (e) {
@@ -121,18 +121,21 @@ window.addEventListener('load', async () => {
     if (!vol) return;
     const lut = palette === "warm" ? warmLUT(a1, a2, a3) : coolLUT(a1, a2, a3);
 
-    vol.isLabel = true;        // force label rendering mode
-    vol.colormap = null;       // prevent grayscale/continuous fallback
-
+    vol.isLabel = true;                    // enable label rendering
     if (typeof nv.setColormapLabel === "function") {
-      nv.setColormapLabel(vol.id, lut);
+      nv.setColormapLabel(vol.id, lut);    // preferred API (0.36.0 supports this)
     } else {
-      vol.colormapLabel = lut; // fallback for older builds
-      vol.colorMapLabel = lut; // alternate spelling
+      vol.colormapLabel = lut;             // fallback for older builds
+      vol.colorMapLabel = lut;
+    }
+    // Keep a valid colormap string; do NOT set null (avoids addColormapList(null) crash)
+    if (!vol.colormap) {
+      if (vol.name === "GT")   vol.colormap = "warm";
+      if (vol.name === "Pred") vol.colormap = "cool";
     }
   }
 
-  // init label colors (visible)
+  // initial LUTs (all labels visible)
   applyLabelLUTStrict(idxGT,   "warm", 160,160,160);
   applyLabelLUTStrict(idxPred, "cool", 160,160,160);
   nv.updateGLVolume();
