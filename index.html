@@ -104,16 +104,13 @@ window.addEventListener('load', async () => {
     const nm = name || fileNameFromUrl(url);
     const op = typeof opacity === 'number' ? opacity : 1.0;
     await preflight(url);
-    // 对于 GT/Pred 不要传 colormap（避免走连续体积路径）
     const o = { url, name: nm, opacity: op };
-    if (colormap) o.colormap = colormap; // 仅给底层图像传 gray
+    if (colormap) o.colormap = colormap; // only for background image
     return nv.addVolumeFromUrl(o);
   }
 
   try {
-    // 背景图像仍然是连续体积，用 gray
     await addVolumeSafe({ url: urlImg,  name: 'imaging_float32_lowres.nii',  colormap: 'gray', opacity: 1.0 });
-    // GT/Pred 不传 colormap（关键）
     await addVolumeSafe({ url: urlGT,   name: 'segmentation_labels_int.nii', opacity: 0.6 });
     await addVolumeSafe({ url: urlPred, name: 'pred_labels_int.nii',         opacity: 0.6 });
     console.log("All volumes loaded.");
@@ -124,6 +121,9 @@ window.addEventListener('load', async () => {
 
   const idxGT   = nv.volumes.findIndex(v => v.name === "segmentation_labels_int.nii" || v.name === "GT");
   const idxPred = nv.volumes.findIndex(v => v.name === "pred_labels_int.nii"         || v.name === "Pred");
+
+  const ON = 255;
+  const OFF = 0;
 
   function warmLUT(a1, a2, a3) {
     return {
@@ -147,50 +147,34 @@ window.addEventListener('load', async () => {
   }
 
   function refreshColorStuff() {
-    if (typeof nv.refreshColormaps === "function") nv.refreshColormaps();
-    else if (typeof nv.refreshLayers === "function") nv.refreshLayers();
-  }
-function applyLabelLUT(volIndex, palette, a1, a2, a3) {
-  const vol = nv.volumes[volIndex];
-  if (!vol) return;
-
-  const lut = (palette === "warm")
-    ? {
-        R: [0, 255, 255, 255],
-        G: [0, 140,  60, 200],
-        B: [0,   0,  60,   0],
-        A: [0,  a1,  a2,  a3],
-        I: [0,   1,   2,   3],
-        labels: ["background", "kidney", "tumor", "cyst"]
-      }
-    : {
-        R: [0,   0,   0, 160],
-        G: [0, 200, 120,   0],
-        B: [0, 255, 255, 255],
-        A: [0,  a1,  a2,  a3],
-        I: [0,   1,   2,   3],
-        labels: ["background", "kidney", "tumor", "cyst"]
-      };
-
-  // 1) 进入标签渲染模式
-  vol.isLabel = true;
-
-  // 2) 设置一个非空的 colormap 字符串，避免内部 toLowerCase 报错
-  vol.colormap = (palette === "warm") ? "warm" : "cool";
-
-  // 3) 设置 label LUT（真正控制 1/2/3 的透明度）
-  if (typeof nv.setColormapLabel === "function") {
-    nv.setColormapLabel(vol.id, lut);
-  } else {
-    vol.colormapLabel = lut;
-    vol.colorMapLabel = lut;
+    if (typeof nv.refreshLayers === "function") nv.refreshLayers();
+    else if (typeof nv.refreshColormaps === "function") nv.refreshColormaps();
   }
 
-  // 4) 刷新并重绘
-  if (typeof nv.refreshLayers === "function") nv.refreshLayers();
-  else if (typeof nv.refreshColormaps === "function") nv.refreshColormaps();
-  nv.updateGLVolume();
-}
+  function applyLabelLUT(volIndex, palette, a1, a2, a3) {
+    const vol = nv.volumes[volIndex];
+    if (!vol) return;
+
+    const lut = (palette === "warm") ? warmLUT(a1,a2,a3) : coolLUT(a1,a2,a3);
+
+    vol.isLabel = true;                                  // enable label mode
+    vol.colormap = (palette === "warm") ? "warm" : "cool"; // keep a valid string colormap
+
+    if (typeof nv.setColormapLabel === "function") {
+      nv.setColormapLabel(vol.id, lut);
+    } else {
+      vol.colormapLabel = lut;
+      vol.colorMapLabel = lut;
+    }
+
+    refreshColorStuff();
+    nv.updateGLVolume();
+  }
+
+  // global layer controls
+  const gtCB   = document.getElementById('showGT');
+  const predCB = document.getElementById('showPred');
+  const opSL   = document.getElementById('opacity');
 
   function applyLayerUI() {
     const val = parseFloat(opSL.value);
@@ -203,6 +187,7 @@ function applyLabelLUT(volIndex, palette, a1, a2, a3) {
   opSL.addEventListener('input',  applyLayerUI);
   applyLayerUI();
 
+  // per-label checkboxes
   const gtKidney = document.getElementById('gtKidney');
   const gtTumor  = document.getElementById('gtTumor');
   const gtCyst   = document.getElementById('gtCyst');
@@ -241,6 +226,7 @@ function applyLabelLUT(volIndex, palette, a1, a2, a3) {
     return false;
   }
 
+  // initialize: disable cyst if missing; then apply visibility once
   (async () => {
     if (idxGT >= 0) {
       const exist3 = await hasLabel(idxGT, 3);
