@@ -53,7 +53,7 @@
     </div>
 
     <div class="hint" style="margin-top:8px;">
-      Warm/cool styling is per-layer; per-label checkboxes toggle 1/2/3 via label LUT alpha.
+      Warm/cool is per-layer; per-label checkboxes toggle 1/2/3 via label LUT alpha.
     </div>
   </div>
 
@@ -95,9 +95,7 @@ window.addEventListener('load', async () => {
   const idxGT   = nv.volumes.findIndex(v => v.name === "GT");
   const idxPred = nv.volumes.findIndex(v => v.name === "Pred");
 
-  // Warm-toned discrete label LUT for GT (1/2/3 mapped to warm-ish colors)
   function makeWarmLUT(a1, a2, a3) {
-    // 1: orange (255,140,0), 2: red (255,60,60), 3: amber (255,200,0)
     return {
       R: [0, 255, 255, 255],
       G: [0, 140,  60, 200],
@@ -107,10 +105,7 @@ window.addEventListener('load', async () => {
       labels: ["background", "kidney", "tumor", "cyst"]
     };
   }
-
-  // Cool-toned discrete label LUT for Pred (1/2/3 mapped to cool-ish colors)
   function makeCoolLUT(a1, a2, a3) {
-    // 1: cyan (0,200,255), 2: blue (0,120,255), 3: purple (160,0,255)
     return {
       R: [0,   0,   0, 160],
       G: [0, 200, 120,   0],
@@ -125,15 +120,13 @@ window.addEventListener('load', async () => {
     const vol = nv.volumes[volIndex];
     if (!vol) return;
     const lut = palette === "warm" ? makeWarmLUT(a1, a2, a3) : makeCoolLUT(a1, a2, a3);
-    // Set both spellings for older builds
     vol.colormapLabel = lut;
-    vol.colorMapLabel = lut;
-    vol.isLabel = true;
-    // Ensure we don't render with a continuous colormap fallback
-    vol.colormap = null;
+    vol.colorMapLabel = lut;   // older builds sometimes use this key
+    vol.isLabel = true;        // force label mode
+    vol.colormap = null;       // avoid continuous colormap fallback
   }
 
-  // Initial per-layer label colors: all labels visible (alpha ~160)
+  // init label colors (visible)
   applyLabelLUT(idxGT,   "warm", 160,160,160);
   applyLabelLUT(idxPred, "cool", 160,160,160);
   nv.updateGLVolume();
@@ -147,7 +140,7 @@ window.addEventListener('load', async () => {
     return false;
   }
 
-  // Overall layer toggles + opacity
+  // overall layer toggles + opacity
   const gtCB   = document.getElementById('showGT');
   const predCB = document.getElementById('showPred');
   const opSL   = document.getElementById('opacity');
@@ -163,7 +156,7 @@ window.addEventListener('load', async () => {
   opSL.addEventListener('input',  applyLayerUI);
   applyLayerUI();
 
-  // Per-label controls
+  // per-label toggles
   const gtKidney = document.getElementById('gtKidney');
   const gtTumor  = document.getElementById('gtTumor');
   const gtCyst   = document.getElementById('gtCyst');
