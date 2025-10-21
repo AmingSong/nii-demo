@@ -68,42 +68,52 @@ window.addEventListener('load', async () => {
   nv.attachTo('gl');
 
   function absUrl(p) { return new URL(p, window.location.href).toString(); }
-  function fileNameFromUrl(u) {
-    try { const s = u.split('?')[0]; return s.substring(s.lastIndexOf('/')+1) || u; }
-    catch { return u; }
-  }
 
   let base = "./case_00003/";
   if (!base.endsWith("/")) base += "/";
 
+  // 仅改动这两行：使用已确认存在的整数标签 NIfTI
   const urlImg  = absUrl(base + "imaging_float32_lowres.nii");
-  const urlGT   = absUrl(base + "segmentation_aligned_lowres.nii");
-  const urlPred = absUrl(base + "case_00003_aligned_lowres.nii");
+  const urlGT   = absUrl(base + "segmentation_labels_int.nii");
+  const urlPred = absUrl(base + "pred_labels_int.nii");
+
   console.log("Resolved URLs:", { urlImg, urlGT, urlPred });
 
-  // hardened add: always provide name/colormap/opacity; verify url
-  async function addVolumeSafe({url, name, colormap, opacity}) {
-    if (typeof url !== 'string' || url.length === 0) {
-      throw new Error('volume url must be a non-empty string');
+  // 预检：捕获 404/HTML 响应，避免误判为“坏 NIFTI”
+  async function preflight(url) {
+    try {
+      const res = await fetch(url, { method: 'GET' });
+      const ct = (res.headers.get('Content-Type') || '').toLowerCase();
+      if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+      if (ct.includes('text/html')) throw new Error(`Content-Type=${ct} (looks like HTML, not NIfTI)`);
+      return true;
+    } catch (err) {
+      throw new Error(`Preflight failed for ${url}: ${err.message}`);
     }
-    const nm = name && typeof name === 'string' && name.includes('.') ? name : fileNameFromUrl(url);
-    const cmap = (typeof colormap === 'string' && colormap) ? colormap : 'gray';
-    const op = (typeof opacity === 'number') ? opacity : 1.0;
+  }
+
+  // 确保传入 addVolumeFromUrl 的对象字段完整
+  async function addVolumeSafe({url, name, colormap, opacity}) {
+    if (typeof url !== 'string' || !url) throw new Error('volume url must be non-empty string');
+    const nm = name || url.split('/').pop() || 'volume.nii';
+    const cmap = colormap || 'gray';
+    const op = typeof opacity === 'number' ? opacity : 1.0;
+    await preflight(url);
     return nv.addVolumeFromUrl({ url, name: nm, colormap: cmap, opacity: op });
   }
 
   try {
     await addVolumeSafe({ url: urlImg,  name: 'imaging_float32_lowres.nii',  colormap: 'gray', opacity: 1.0 });
-    await addVolumeSafe({ url: urlGT,   name: 'segmentation_aligned_lowres.nii', colormap: 'warm', opacity: 0.6 });
-    await addVolumeSafe({ url: urlPred, name: 'case_00003_aligned_lowres.nii',   colormap: 'cool', opacity: 0.6 });
+    await addVolumeSafe({ url: urlGT,   name: 'segmentation_labels_int.nii', colormap: 'warm', opacity: 0.6 });
+    await addVolumeSafe({ url: urlPred, name: 'pred_labels_int.nii',         colormap: 'cool', opacity: 0.6 });
     console.log("All volumes loaded.");
   } catch (e) {
     console.error("Failed to load volumes:", e);
     return;
   }
 
-  const idxGT   = nv.volumes.findIndex(v => v.name === "segmentation_aligned_lowres.nii" || v.name === "GT");
-  const idxPred = nv.volumes.findIndex(v => v.name === "case_00003_aligned_lowres.nii"   || v.name === "Pred");
+  const idxGT   = nv.volumes.findIndex(v => v.name === "segmentation_labels_int.nii" || v.name === "GT");
+  const idxPred = nv.volumes.findIndex(v => v.name === "pred_labels_int.nii"         || v.name === "Pred");
 
   function warmLUT(a1, a2, a3) {
     return {
