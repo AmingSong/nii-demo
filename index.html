@@ -68,34 +68,37 @@ window.addEventListener('load', async () => {
   nv.attachTo('gl');
 
   function absUrl(p) { return new URL(p, window.location.href).toString(); }
+  function fileNameFromUrl(u) {
+    try { const s = u.split('?')[0]; return s.substring(s.lastIndexOf('/')+1) || u; }
+    catch { return u; }
+  }
 
   let base = "./case_00003/";
   if (!base.endsWith("/")) base += "/";
 
-  // 仅改动这两行：使用已确认存在的整数标签 NIfTI
+  // Use the new NIfTI files
   const urlImg  = absUrl(base + "imaging_float32_lowres.nii");
   const urlGT   = absUrl(base + "segmentation_labels_int.nii");
   const urlPred = absUrl(base + "pred_labels_int.nii");
-
   console.log("Resolved URLs:", { urlImg, urlGT, urlPred });
 
-  // 预检：捕获 404/HTML 响应，避免误判为“坏 NIFTI”
+  // Preflight small range to detect LFS pointer/HTML before handing to Niivue
   async function preflight(url) {
-    try {
-      const res = await fetch(url, { method: 'GET' });
-      const ct = (res.headers.get('Content-Type') || '').toLowerCase();
-      if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
-      if (ct.includes('text/html')) throw new Error(`Content-Type=${ct} (looks like HTML, not NIfTI)`);
-      return true;
-    } catch (err) {
-      throw new Error(`Preflight failed for ${url}: ${err.message}`);
+    const res = await fetch(url, { method: 'GET', headers: { 'Range': 'bytes=0-127' } });
+    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+    const ct = (res.headers.get('Content-Type') || '').toLowerCase();
+    const buf = await res.arrayBuffer();
+    const txtHead = new TextDecoder().decode(new Uint8Array(buf));
+    if (ct.includes('text/html')) throw new Error('Got HTML instead of NIfTI');
+    if (txtHead.startsWith('version https://git-lfs.github.com/spec')) {
+      throw new Error('Got Git LFS pointer text instead of NIfTI');
     }
+    return true;
   }
 
-  // 确保传入 addVolumeFromUrl 的对象字段完整
   async function addVolumeSafe({url, name, colormap, opacity}) {
     if (typeof url !== 'string' || !url) throw new Error('volume url must be non-empty string');
-    const nm = name || url.split('/').pop() || 'volume.nii';
+    const nm = name || fileNameFromUrl(url);
     const cmap = colormap || 'gray';
     const op = typeof opacity === 'number' ? opacity : 1.0;
     await preflight(url);
