@@ -73,8 +73,8 @@ window.addEventListener('load', async () => {
   if (!base.endsWith("/")) base += "/";
 
   const urlImg  = absUrl(base + "imaging_float32_lowres.nii");
-  const urlGT   = absUrl(base + "segmentation_aligned_lowres.nii");
-  const urlPred = absUrl(base + "case_00003_aligned_lowres.nii");
+  const urlGT   = absUrl(base + "segmentation_labels_int.nii");
+  const urlPred = absUrl(base + "pred_labels_int.nii");
   console.log("Resolved URLs:", { urlImg, urlGT, urlPred });
 
   try {
