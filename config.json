@@ -1,0 +1,24 @@
+{
+  "images": [
+    {
+      "url": "https://huggingface.co/datasets/AMING7779/nii-demo-case-00003/resolve/main/imaging.nii.gz",
+      "colormap": "gray",
+      "opacity": 1.0,
+      "visible": true
+    },
+    {
+      "url": "https://huggingface.co/datasets/AMING7779/nii-demo-case-00003/resolve/main/segmentation.nii.gz",
+      "colormap": "red",
+      "opacity": 0.5,
+      "visible": true,
+      "lut": "https://niivue.github.io/niivue/images/lut_files/FSL.txt"
+    },
+    {
+      "url": "https://huggingface.co/datasets/AMING7779/nii-demo-case-00003/resolve/main/case_00003.nii.gz",
+      "colormap": "green",
+      "opacity": 0.5,
+      "visible": true,
+      "lut": "https://niivue.github.io/niivue/images/lut_files/FSL.txt"
+    }
+  ]
+}
