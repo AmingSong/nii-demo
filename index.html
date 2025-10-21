@@ -53,7 +53,7 @@
     </div>
 
     <div class="hint" style="margin-top:8px;">
-      Layer toggles control whole masks; per-label checkboxes toggle labels 1/2/3 via LUT alpha.
+      Per-label toggles are bound to the actual label values detected in the volumes (sorted ascending).
     </div>
   </div>
 
@@ -68,22 +68,16 @@ window.addEventListener('load', async () => {
   nv.attachTo('gl');
 
   function absUrl(p) { return new URL(p, window.location.href).toString(); }
-  function fileNameFromUrl(u) {
-    try { const s = u.split('?')[0]; return s.substring(s.lastIndexOf('/')+1) || u; }
-    catch { return u; }
-  }
+  function fname(u){ try{const s=u.split('?')[0];return s.substring(s.lastIndexOf('/')+1)||u;}catch{return u;} }
 
-  let base = "./case_00003/";
-  if (!base.endsWith("/")) base += "/";
-
+  let base = "./case_00003/"; if (!base.endsWith("/")) base += "/";
   const urlImg  = absUrl(base + "imaging_float32_lowres.nii");
   const urlGT   = absUrl(base + "segmentation_labels_int.nii");
   const urlPred = absUrl(base + "pred_labels_int.nii");
   console.log("Resolved URLs:", { urlImg, urlGT, urlPred });
 
   async function addVolumeSafe({url, name, colormap, opacity}) {
-    if (typeof url !== 'string' || !url) throw new Error('volume url must be non-empty string');
-    const nm = name || fileNameFromUrl(url);
+    const nm = name || fname(url);
     const o = { url, name: nm };
     if (typeof opacity === 'number') o.opacity = opacity;
     if (colormap) o.colormap = colormap;
@@ -103,67 +97,105 @@ window.addEventListener('load', async () => {
   const idxGT   = nv.volumes.findIndex(v => v.name === "segmentation_labels_int.nii" || v.name === "GT");
   const idxPred = nv.volumes.findIndex(v => v.name === "pred_labels_int.nii"         || v.name === "Pred");
 
-  function forceLabelMode(i, palette) {
-    const vol = nv.volumes[i];
-    if (!vol) return;
-    vol.isLabel = true;
-    vol.cal_min = 0;
-    vol.cal_max = 3;
-    vol.range   = [0, 3];
-    vol.colormap = (palette === "warm") ? "warm" : "cool";
-  }
-  forceLabelMode(idxGT,   "warm");
-  forceLabelMode(idxPred, "cool");
-
-  function warmLUT(a1, a2, a3) {
-    return {
-      R: [0, 255, 255, 255],
-      G: [0, 140,  60, 200],
-      B: [0,   0,  60,   0],
-      A: [0,  a1,  a2,  a3],
-      I: [0,   1,   2,   3],
-      labels: ["background", "kidney", "tumor", "cyst"]
-    };
-  }
-  function coolLUT(a1, a2, a3) {
-    return {
-      R: [0,   0,   0, 160],
-      G: [0, 200, 120,   0],
-      B: [0, 255, 255, 255],
-      A: [0,  a1,  a2,  a3],
-      I: [0,   1,   2,   3],
-      labels: ["background", "kidney", "tumor", "cyst"]
-    };
-  }
-
-  function applyLabelLUT(volIndex, palette, a1, a2, a3) {
-    const vol = nv.volumes[volIndex];
-    if (!vol) return;
-
-    const lut = (palette === "warm") ? warmLUT(a1,a2,a3) : coolLUT(a1,a2,a3);
-
-    vol.isLabel = true;
-    vol.cal_min = 0;
-    vol.cal_max = 3;
-    vol.range   = [0, 3];
-    vol.colormap = (palette === "warm") ? "warm" : "cool";
-
-    if (typeof nv.setColormapLabel === "function") {
-      nv.setColormapLabel(vol.id, lut);
-    } else {
-      vol.colormapLabel = lut;
-      vol.colorMapLabel = lut;
+  function uniqLabels(volIndex, maxLabels=3){
+    const v = nv.volumes[volIndex];
+    if (!v || !v.img) return [];
+    const data = v.img;
+    const set = new Set();
+    // sample every kth voxel to speed up, but still capture labels
+    const step = Math.max(1, Math.floor(data.length / 2e6)); // throttle if very large
+    for (let i=0; i<data.length; i+=step){
+      const val = data[i];
+      if (val !== 0) set.add(val);
+      if (set.size > 16) break; // guard
     }
+    const arr = Array.from(set).sort((a,b)=>a-b);
+    // prefer first 3 smallest as [kidney, tumor, cyst] in that order
+    return arr.slice(0, maxLabels);
+  }
 
+  // detect actual labels
+  const gtVals   = uniqLabels(idxGT);
+  const predVals = uniqLabels(idxPred);
+  console.log("Detected labels -> GT:", gtVals, "Pred:", predVals);
+
+  // helper: ensure label mode + sane ranges
+  function forceLabelMode(i, palette, minVal, maxVal){
+    const vol = nv.volumes[i]; if (!vol) return;
+    vol.isLabel = true;
+    vol.cal_min = (typeof minVal==='number') ? minVal : 0;
+    vol.cal_max = (typeof maxVal==='number') ? maxVal : Math.max(3, vol.cal_min+1);
+    vol.range   = [vol.cal_min, vol.cal_max];
+    vol.colormap = (palette === "warm") ? "warm" : "cool";
+  }
+
+  // compute ranges from data (fallback to 0..3)
+  const gtMin = (gtVals.length? Math.min(...gtVals) : 0);
+  const gtMax = (gtVals.length? Math.max(...gtVals) : 3);
+  const prMin = (predVals.length? Math.min(...predVals) : 0);
+  const prMax = (predVals.length? Math.max(...predVals) : 3);
+
+  forceLabelMode(idxGT,   "warm", gtMin, gtMax);
+  forceLabelMode(idxPred, "cool", prMin, prMax);
+
+  // map UI logical slots -> actual values (fill missing with NaN)
+  function mapSlots(vals){
+    const a = [NaN, NaN, NaN];
+    for (let i=0;i<Math.min(3, vals.length);i++) a[i] = vals[i];
+    return a;
+  }
+  const gtMap   = mapSlots(gtVals);
+  const predMap = mapSlots(predVals);
+
+  function makeLUT(palette, alpha1, alpha2, alpha3, mapVals){
+    // mapVals: [v1,v2,v3] (could be NaN if not present)
+    // Build I: [0, v1, v2, v3], replace NaN with a value not in data to keep it invisible anyway.
+    const fill = -123456; // unlikely value
+    const I = [0,
+      Number.isFinite(mapVals[0]) ? mapVals[0] : fill,
+      Number.isFinite(mapVals[1]) ? mapVals[1] : fill,
+      Number.isFinite(mapVals[2]) ? mapVals[2] : fill
+    ];
+    const A = [0,
+      Number.isFinite(mapVals[0]) ? alpha1 : 0,
+      Number.isFinite(mapVals[1]) ? alpha2 : 0,
+      Number.isFinite(mapVals[2]) ? alpha3 : 0
+    ];
+    if (palette === "warm"){
+      return { R:[0,255,255,255], G:[0,140,60,200], B:[0,0,60,0], A, I,
+               labels:["background","kidney","tumor","cyst"] };
+    } else {
+      return { R:[0,0,0,160], G:[0,200,120,0], B:[0,255,255,255], A, I,
+               labels:["background","kidney","tumor","cyst"] };
+    }
+  }
+
+  function setLabelLUT(volIndex, lut, palette){
+    const vol = nv.volumes[volIndex]; if (!vol) return;
+    vol.isLabel = true;
+    vol.colormap = (palette === "warm") ? "warm" : "cool";
+    if (typeof nv.setColormapLabel === "function") nv.setColormapLabel(vol.id, lut);
+    else { vol.colormapLabel = lut; vol.colorMapLabel = lut; }
     if (typeof nv.refreshColormaps === "function") nv.refreshColormaps();
     nv.updateGLVolume();
   }
 
   const ON = 255, OFF = 0;
 
-  applyLabelLUT(idxGT,   "warm", ON, ON, ON);
-  applyLabelLUT(idxPred, "cool", ON, ON, ON);
+  function applyGT(a1,a2,a3){
+    const lut = makeLUT("warm", a1,a2,a3, gtMap);
+    setLabelLUT(idxGT, lut, "warm");
+  }
+  function applyPred(a1,a2,a3){
+    const lut = makeLUT("cool", a1,a2,a3, predMap);
+    setLabelLUT(idxPred, lut, "cool");
+  }
 
+  // init: all on
+  applyGT(ON,ON,ON);
+  applyPred(ON,ON,ON);
+
+  // global toggles + opacity
   const gtCB   = document.getElementById('showGT');
   const predCB = document.getElementById('showPred');
   const opSL   = document.getElementById('opacity');
@@ -179,6 +211,7 @@ window.addEventListener('load', async () => {
   opSL.addEventListener('input',  applyLayerUI);
   applyLayerUI();
 
+  // per-label UI
   const gtKidney = document.getElementById('gtKidney');
   const gtTumor  = document.getElementById('gtTumor');
   const gtCyst   = document.getElementById('gtCyst');
@@ -190,12 +223,12 @@ window.addEventListener('load', async () => {
   const predCystNote = document.getElementById('predCystNote');
 
   function applyAllLabelVisibility() {
-    applyLabelLUT(idxGT, "warm",
+    applyGT(
       gtKidney.checked ? ON : OFF,
       gtTumor.checked  ? ON : OFF,
       gtCyst.checked   ? ON : OFF
     );
-    applyLabelLUT(idxPred, "cool",
+    applyPred(
       predKidney.checked ? ON : OFF,
       predTumor.checked  ? ON : OFF,
       predCyst.checked   ? ON : OFF
@@ -209,26 +242,14 @@ window.addEventListener('load', async () => {
   predTumor .addEventListener('change', applyAllLabelVisibility);
   predCyst  .addEventListener('change', applyAllLabelVisibility);
 
-  async function hasLabel(iVol, value) {
-    const v = nv.volumes[iVol];
-    if (!v) return false;
-    const data = v.img || (typeof v.img2RAS === "function" ? v.img2RAS() : null);
-    if (!data || !data.length) return false;
-    for (let k = 0; k < data.length; k++) if (data[k] === value) return true;
-    return false;
+  // disable cyst checkbox if没这个标签
+  if (!(gtMap[2] && Number.isFinite(gtMap[2]))) {
+    gtCyst.checked = false; gtCyst.disabled = true; gtCystNote.textContent = " (no cyst in GT)";
   }
-
-  requestAnimationFrame(async () => {
-    if (idxGT >= 0) {
-      const exist3 = await hasLabel(idxGT, 3);
-      if (!exist3) { gtCyst.checked = false; gtCyst.disabled = true; gtCystNote.textContent = " (no cyst in GT)"; }
-    }
-    if (idxPred >= 0) {
-      const exist3 = await hasLabel(idxPred, 3);
-      if (!exist3) { predCyst.checked = false; predCyst.disabled = true; predCystNote.textContent = " (no cyst in Pred)"; }
-    }
-    applyAllLabelVisibility();
-  });
+  if (!(predMap[2] && Number.isFinite(predMap[2]))) {
+    predCyst.checked = false; predCyst.disabled = true; predCystNote.textContent = " (no cyst in Pred)";
+  }
+  applyAllLabelVisibility();
 });
 </script>
 </body>
