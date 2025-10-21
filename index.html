@@ -105,7 +105,7 @@ window.addEventListener('load', async () => {
     const op = typeof opacity === 'number' ? opacity : 1.0;
     await preflight(url);
     const o = { url, name: nm, opacity: op };
-    if (colormap) o.colormap = colormap; // only for background image
+    if (colormap) o.colormap = colormap; // only for the background image
     return nv.addVolumeFromUrl(o);
   }
 
@@ -122,8 +122,7 @@ window.addEventListener('load', async () => {
   const idxGT   = nv.volumes.findIndex(v => v.name === "segmentation_labels_int.nii" || v.name === "GT");
   const idxPred = nv.volumes.findIndex(v => v.name === "pred_labels_int.nii"         || v.name === "Pred");
 
-  const ON = 255;
-  const OFF = 0;
+  const ON = 255, OFF = 0;
 
   function warmLUT(a1, a2, a3) {
     return {
@@ -146,8 +145,8 @@ window.addEventListener('load', async () => {
     };
   }
 
-  // Safer refresh: avoid refreshLayers() which may touch volumes without hdr yet
-  function refreshColorStuff() {
+  // Never call nv.refreshLayers() here.
+  function refreshColorMapsOnly() {
     if (typeof nv.refreshColormaps === "function") nv.refreshColormaps();
     nv.updateGLVolume();
   }
@@ -158,7 +157,7 @@ window.addEventListener('load', async () => {
 
     const lut = (palette === "warm") ? warmLUT(a1,a2,a3) : coolLUT(a1,a2,a3);
 
-    vol.isLabel = true;                                   // label rendering path
+    vol.isLabel = true;
     vol.colormap = (palette === "warm") ? "warm" : "cool"; // keep a valid string
 
     if (typeof nv.setColormapLabel === "function") {
@@ -168,10 +167,10 @@ window.addEventListener('load', async () => {
       vol.colorMapLabel = lut;
     }
 
-    refreshColorStuff(); // rebuild colormap textures (safe path) and redraw
+    refreshColorMapsOnly();
   }
 
-  // global layer controls
+  // layer toggles
   const gtCB   = document.getElementById('showGT');
   const predCB = document.getElementById('showPred');
   const opSL   = document.getElementById('opacity');
@@ -187,7 +186,7 @@ window.addEventListener('load', async () => {
   opSL.addEventListener('input',  applyLayerUI);
   applyLayerUI();
 
-  // per-label checkboxes
+  // per-label
   const gtKidney = document.getElementById('gtKidney');
   const gtTumor  = document.getElementById('gtTumor');
   const gtCyst   = document.getElementById('gtCyst');
@@ -226,7 +225,7 @@ window.addEventListener('load', async () => {
     return false;
   }
 
-  // Defer first application one frame to ensure textures are fully ready
+  // defer first apply to next frame
   (async () => {
     if (idxGT >= 0) {
       const exist3 = await hasLabel(idxGT, 3);
