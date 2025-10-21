@@ -150,38 +150,47 @@ window.addEventListener('load', async () => {
     if (typeof nv.refreshColormaps === "function") nv.refreshColormaps();
     else if (typeof nv.refreshLayers === "function") nv.refreshLayers();
   }
+function applyLabelLUT(volIndex, palette, a1, a2, a3) {
+  const vol = nv.volumes[volIndex];
+  if (!vol) return;
 
-  // 关键：强制标签路径，然后设置 label LUT，再刷新&重绘
-  function applyLabelLUT(volIndex, palette, a1, a2, a3) {
-    const vol = nv.volumes[volIndex];
-    if (!vol) return;
+  const lut = (palette === "warm")
+    ? {
+        R: [0, 255, 255, 255],
+        G: [0, 140,  60, 200],
+        B: [0,   0,  60,   0],
+        A: [0,  a1,  a2,  a3],
+        I: [0,   1,   2,   3],
+        labels: ["background", "kidney", "tumor", "cyst"]
+      }
+    : {
+        R: [0,   0,   0, 160],
+        G: [0, 200, 120,   0],
+        B: [0, 255, 255, 255],
+        A: [0,  a1,  a2,  a3],
+        I: [0,   1,   2,   3],
+        labels: ["background", "kidney", "tumor", "cyst"]
+      };
 
-    const lut = palette === "warm" ? warmLUT(a1,a2,a3) : coolLUT(a1,a2,a3);
+  // 1) 进入标签渲染模式
+  vol.isLabel = true;
 
-    // 强制标签体渲染
-    vol.isLabel = true;
-    // 清掉连续体积 colormap 的干扰
-    vol.colormap = null;
+  // 2) 设置一个非空的 colormap 字符串，避免内部 toLowerCase 报错
+  vol.colormap = (palette === "warm") ? "warm" : "cool";
 
-    if (typeof nv.setColormapLabel === "function") {
-      nv.setColormapLabel(vol.id, lut);
-    } else {
-      vol.colormapLabel = lut;
-      vol.colorMapLabel = lut;
-    }
-
-    refreshColorStuff();
-    nv.updateGLVolume();
+  // 3) 设置 label LUT（真正控制 1/2/3 的透明度）
+  if (typeof nv.setColormapLabel === "function") {
+    nv.setColormapLabel(vol.id, lut);
+  } else {
+    vol.colormapLabel = lut;
+    vol.colorMapLabel = lut;
   }
 
-  const ON = 255, OFF = 0;
-  // 初始化：全部可见
-  applyLabelLUT(idxGT,   "warm", ON, ON, ON);
-  applyLabelLUT(idxPred, "cool", ON, ON, ON);
-
-  const gtCB   = document.getElementById('showGT');
-  const predCB = document.getElementById('showPred');
-  const opSL   = document.getElementById('opacity');
+  // 4) 刷新并重绘
+  if (typeof nv.refreshLayers === "function") nv.refreshLayers();
+  else if (typeof nv.refreshColormaps === "function") nv.refreshColormaps();
+  nv.updateGLVolume();
+}
 
   function applyLayerUI() {
     const val = parseFloat(opSL.value);
