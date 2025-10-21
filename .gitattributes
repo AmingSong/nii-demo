@@ -3,3 +3,4 @@
 追踪 filter=lfs diff=lfs merge=lfs -text
 NIfTI filter=lfs diff=lfs merge=lfs -text
 *.nii filter=lfs diff=lfs merge=lfs -text
+*.nii.gz filter=lfs diff=lfs merge=lfs -text
