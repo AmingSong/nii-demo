@@ -67,6 +67,9 @@ window.addEventListener('load', async () => {
   const nv = new NiiVueClass({ show3Dcrosshair: true, isWebGL2: true, logging: true });
   nv.attachTo('gl');
 
+  // Critical: use nearest-neighbor for label maps so voxel values stay 0/1/2/3
+  if (typeof nv.setInterpolation === 'function') nv.setInterpolation(true);
+
   function absUrl(p) { return new URL(p, window.location.href).toString(); }
 
   let base = "./case_00003/";
@@ -124,11 +127,12 @@ window.addEventListener('load', async () => {
   function applyLabelLUTStrict(volIndex, palette, a1, a2, a3) {
     const vol = nv.volumes[volIndex];
     if (!vol) return;
-    const lut = (palette === "warm") ? warmLUT(a1, a2, a3) : coolLUT(a1, a2, a3);
+    const lut = palette === "warm" ? warmLUT(a1, a2, a3) : coolLUT(a1, a2, a3);
 
-    // Important: switch to label mode before assigning the LUT
+    // Enter label mode first
     vol.isLabel = true;
 
+    // Apply discrete label colormap
     if (typeof nv.setColormapLabel === "function") {
       nv.setColormapLabel(vol.id, lut);
     } else {
@@ -136,20 +140,22 @@ window.addEventListener('load', async () => {
       vol.colorMapLabel = lut;
     }
 
-    // Keep a valid string colormap; do not set null
+    // Keep a valid string colormap
     if (!vol.colormap) {
       if (vol.name === "GT")   vol.colormap = "warm";
       if (vol.name === "Pred") vol.colormap = "cool";
     }
 
-    // Refresh colormap textures and then redraw
+    // Rebuild colormap textures and redraw
     refreshColorStuff();
     nv.updateGLVolume();
   }
 
-  // Initial LUTs (all labels visible)
-  applyLabelLUTStrict(idxGT,   "warm", 160,160,160);
-  applyLabelLUTStrict(idxPred, "cool", 160,160,160);
+  // Use full on/off alpha for clear effect
+  const ON = 255, OFF = 0;
+
+  applyLabelLUTStrict(idxGT,   "warm", ON, ON, ON);
+  applyLabelLUTStrict(idxPred, "cool", ON, ON, ON);
 
   async function hasLabel(iVol, value) {
     const v = nv.volumes[iVol];
@@ -188,16 +194,17 @@ window.addEventListener('load', async () => {
   function applyAllLabelVisibility() {
     applyLabelLUTStrict(
       idxGT, "warm",
-      gtKidney.checked ? 160 : 0,
-      gtTumor.checked  ? 160 : 0,
-      gtCyst.checked   ? 160 : 0
+      gtKidney.checked ? ON : OFF,
+      gtTumor.checked  ? ON : OFF,
+      gtCyst.checked   ? ON : OFF
     );
     applyLabelLUTStrict(
       idxPred, "cool",
-      predKidney.checked ? 160 : 0,
-      predTumor.checked  ? 160 : 0,
-      predCyst.checked   ? 160 : 0
+      predKidney.checked ? ON : OFF,
+      predTumor.checked  ? ON : OFF,
+      predCyst.checked   ? ON : OFF
     );
+    // applyLabelLUTStrict already refreshes and redraws
   }
 
   gtKidney.addEventListener('change', applyAllLabelVisibility);
