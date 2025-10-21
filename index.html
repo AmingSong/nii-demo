@@ -75,17 +75,13 @@ window.addEventListener('load', async () => {
 
   let base = "./case_00003/";
   if (!base.endsWith("/")) base += "/";
-
-  // cache-buster to bypass any stale cached pointer files
   const bust = `?v=${Date.now()}`;
 
-  // Use the new NIfTI files with cache-busting
   const urlImg  = absUrl(base + "imaging_float32_lowres.nii" + bust);
   const urlGT   = absUrl(base + "segmentation_labels_int.nii" + bust);
   const urlPred = absUrl(base + "pred_labels_int.nii" + bust);
   console.log("Resolved URLs:", { urlImg, urlGT, urlPred });
 
-  // Preflight small range to detect LFS pointer/HTML before Niivue, no-store to avoid cache
   async function preflight(url) {
     const res = await fetch(url, {
       method: 'GET',
@@ -106,16 +102,20 @@ window.addEventListener('load', async () => {
   async function addVolumeSafe({url, name, colormap, opacity}) {
     if (typeof url !== 'string' || !url) throw new Error('volume url must be non-empty string');
     const nm = name || fileNameFromUrl(url);
-    const cmap = colormap || 'gray';
     const op = typeof opacity === 'number' ? opacity : 1.0;
     await preflight(url);
-    return nv.addVolumeFromUrl({ url, name: nm, colormap: cmap, opacity: op });
+    // 对于 GT/Pred 不要传 colormap（避免走连续体积路径）
+    const o = { url, name: nm, opacity: op };
+    if (colormap) o.colormap = colormap; // 仅给底层图像传 gray
+    return nv.addVolumeFromUrl(o);
   }
 
   try {
+    // 背景图像仍然是连续体积，用 gray
     await addVolumeSafe({ url: urlImg,  name: 'imaging_float32_lowres.nii',  colormap: 'gray', opacity: 1.0 });
-    await addVolumeSafe({ url: urlGT,   name: 'segmentation_labels_int.nii', colormap: 'warm', opacity: 0.6 });
-    await addVolumeSafe({ url: urlPred, name: 'pred_labels_int.nii',         colormap: 'cool', opacity: 0.6 });
+    // GT/Pred 不传 colormap（关键）
+    await addVolumeSafe({ url: urlGT,   name: 'segmentation_labels_int.nii', opacity: 0.6 });
+    await addVolumeSafe({ url: urlPred, name: 'pred_labels_int.nii',         opacity: 0.6 });
     console.log("All volumes loaded.");
   } catch (e) {
     console.error("Failed to load volumes:", e);
@@ -151,19 +151,31 @@ window.addEventListener('load', async () => {
     else if (typeof nv.refreshLayers === "function") nv.refreshLayers();
   }
 
+  // 关键：强制标签路径，然后设置 label LUT，再刷新&重绘
   function applyLabelLUT(volIndex, palette, a1, a2, a3) {
     const vol = nv.volumes[volIndex];
     if (!vol) return;
+
     const lut = palette === "warm" ? warmLUT(a1,a2,a3) : coolLUT(a1,a2,a3);
+
+    // 强制标签体渲染
     vol.isLabel = true;
-    if (typeof nv.setColormapLabel === "function") nv.setColormapLabel(vol.id, lut);
-    else { vol.colormapLabel = lut; vol.colorMapLabel = lut; }
-    if (!vol.colormap) vol.colormap = (palette === 'warm') ? 'warm' : 'cool';
+    // 清掉连续体积 colormap 的干扰
+    vol.colormap = null;
+
+    if (typeof nv.setColormapLabel === "function") {
+      nv.setColormapLabel(vol.id, lut);
+    } else {
+      vol.colormapLabel = lut;
+      vol.colorMapLabel = lut;
+    }
+
     refreshColorStuff();
     nv.updateGLVolume();
   }
 
   const ON = 255, OFF = 0;
+  // 初始化：全部可见
   applyLabelLUT(idxGT,   "warm", ON, ON, ON);
   applyLabelLUT(idxPred, "cool", ON, ON, ON);
 
