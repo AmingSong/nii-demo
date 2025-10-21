@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NiiVue Viewer – Global + Per-label</title>
+  <title>NiiVue Viewer – GT vs Prediction with Label Controls</title>
   <style>
     html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
     #toolbar {
@@ -26,14 +26,14 @@
 <body>
   <div id="toolbar">
     <h3>Layers</h3>
-    <label><input type="checkbox" id="showGT" checked> Show Ground Truth</label>
-    <label><input type="checkbox" id="showPred" checked> Show Prediction</label>
+    <label><input type="checkbox" id="showGT" checked> Show Ground Truth (warm)</label>
+    <label><input type="checkbox" id="showPred" checked> Show Prediction (cool)</label>
     <label>Mask opacity:
       <input type="range" id="opacity" min="0" max="1" step="0.05" value="0.6">
     </label>
     <hr>
     <div class="section">
-      <h3>GT labels</h3>
+      <h3>GT labels (warm)</h3>
       <div class="row">
         <label><input type="checkbox" id="gtKidney" checked> 1 · kidney</label>
         <label><input type="checkbox" id="gtTumor"  checked> 2 · tumor</label>
@@ -41,15 +41,12 @@
       </div>
     </div>
     <div class="section">
-      <h3>Pred labels</h3>
+      <h3>Pred labels (cool)</h3>
       <div class="row">
         <label><input type="checkbox" id="predKidney" checked> 1 · kidney</label>
         <label><input type="checkbox" id="predTumor"  checked> 2 · tumor</label>
         <label><input type="checkbox" id="predCyst"   checked> 3 · cyst <span id="predCystNote" class="hint"></span></label>
       </div>
-    </div>
-    <div class="hint" style="margin-top:8px;">
-      Global toggles show/hide whole masks; per-label toggles use label LUT alpha on 1/2/3.
     </div>
   </div>
 
@@ -63,78 +60,54 @@ window.addEventListener('load', async () => {
   const nv = new NiiVueClass({ show3Dcrosshair: true, isWebGL2: true, logging: true });
   nv.attachTo('gl');
 
-  function absUrl(p) { return new URL(p, window.location.href).toString(); }
-
-  let base = "./case_00003/";
-  if (!base.endsWith("/")) base += "/";
-
-  const urlImg  = absUrl(base + "imaging_float32_lowres.nii");
-  const urlGT   = absUrl(base + "segmentation_labels_int.nii"); // new 3D int label
-  const urlPred = absUrl(base + "pred_labels_int.nii");         // new 3D int label
-  console.log("Resolved URLs:", { urlImg, urlGT, urlPred });
+  const base = "./case_00003/";
+  const vols = [
+    { url: base + "imaging_float32_lowres.nii", name: "Image", colormap: "gray", opacity: 1.0 },
+    { url: base + "segmentation_labels_int.nii", name: "GT", colormap: "warm", opacity: 0.6 },
+    { url: base + "pred_labels_int.nii", name: "Pred", colormap: "cool", opacity: 0.6 }
+  ];
 
   try {
-    await nv.addVolumeFromUrl({ url: urlImg  });
-    await nv.addVolumeFromUrl({ url: urlGT   });
-    await nv.addVolumeFromUrl({ url: urlPred });
-
-    let img  = nv.volumes[0]; if (img)  { img.name  = "Image"; img.opacity = 1.0; if (nv.setColormap) nv.setColormap(img.id, "gray"); }
-    let gt   = nv.volumes[1]; if (gt)   { gt.name   = "GT";    gt.opacity  = 0.6; }
-    let pred = nv.volumes[2]; if (pred) { pred.name = "Pred";  pred.opacity= 0.6; }
-
-    console.log("All volumes loaded.");
+    for (const v of vols) await nv.addVolumeFromUrl(v);
+    console.log("✅ All volumes loaded");
   } catch (e) {
-    console.error("Failed to load volumes:", e);
+    console.error("❌ Failed to load volumes:", e);
     return;
   }
 
-  const idxGT   = nv.volumes.findIndex(v => v.name === "GT");
-  const idxPred = nv.volumes.findIndex(v => v.name === "Pred");
+  const idxGT   = 1;
+  const idxPred = 2;
+  const ON = 255, OFF = 0;
 
-  // warm-ish for GT, cool-ish for Pred
-  function warmLUT(a1, a2, a3) { return {
-    R: [0, 255, 255, 255], G: [0, 140,  60, 200], B: [0, 0,  60,  0], A: [0, a1, a2, a3], I: [0,1,2,3],
-    labels: ["background", "kidney", "tumor", "cyst"]
-  }; }
-  function coolLUT(a1, a2, a3) { return {
-    R: [0,   0,   0, 160], G: [0, 200, 120,  0], B: [0,255, 255,255], A: [0, a1, a2, a3], I: [0,1,2,3],
-    labels: ["background", "kidney", "tumor", "cyst"]
-  }; }
-
-  function refreshColorStuff() {
-    if (typeof nv.refreshColormaps === "function") nv.refreshColormaps();
-    else if (typeof nv.refreshLayers === "function") nv.refreshLayers();
+  // simplified LUTs (manually assigned to simulate label control)
+  function makeWarmLUT(a1, a2, a3) {
+    return { R:[0,255,255,255], G:[0,140,60,200], B:[0,0,60,0], A:[0,a1,a2,a3], I:[0,1,2,3] };
+  }
+  function makeCoolLUT(a1, a2, a3) {
+    return { R:[0,0,0,160], G:[0,200,120,0], B:[0,255,255,255], A:[0,a1,a2,a3], I:[0,1,2,3] };
   }
 
-  function applyLabelLUT(volIndex, palette, a1, a2, a3) {
-    const vol = nv.volumes[volIndex];
+  function applyLabelLUT(idx, warm, a1, a2, a3) {
+    const lut = warm ? makeWarmLUT(a1,a2,a3) : makeCoolLUT(a1,a2,a3);
+    const vol = nv.volumes[idx];
     if (!vol) return;
-    const lut = palette === "warm" ? warmLUT(a1, a2, a3) : coolLUT(a1, a2, a3);
-
-    vol.isLabel = true; // ensure label rendering path
-    if (typeof nv.setColormapLabel === "function") nv.setColormapLabel(vol.id, lut);
-    else { vol.colormapLabel = lut; vol.colorMapLabel = lut; }
-
-    if (!vol.colormap) vol.colormap = "gray"; // keep non-null to avoid older build crashes
-    refreshColorStuff();
+    vol.colormapLabel = lut;
     nv.updateGLVolume();
   }
 
-  const ON = 255, OFF = 0;
+  // initial draw
+  applyLabelLUT(idxGT, true, ON, ON, ON);
+  applyLabelLUT(idxPred, false, ON, ON, ON);
 
-  // initial: all labels visible
-  applyLabelLUT(idxGT,   "warm", ON, ON, ON);
-  applyLabelLUT(idxPred, "cool", ON, ON, ON);
-
-  // global layer toggles + opacity
+  // global controls
   const gtCB   = document.getElementById('showGT');
   const predCB = document.getElementById('showPred');
   const opSL   = document.getElementById('opacity');
 
   function applyLayerUI() {
     const val = parseFloat(opSL.value);
-    if (idxGT   >= 0) nv.volumes[idxGT].opacity  = gtCB.checked   ? val : 0.0;
-    if (idxPred >= 0) nv.volumes[idxPred].opacity = predCB.checked ? val : 0.0;
+    nv.volumes[idxGT].opacity  = gtCB.checked   ? val : 0.0;
+    nv.volumes[idxPred].opacity = predCB.checked ? val : 0.0;
     nv.updateGLVolume();
   }
   gtCB.addEventListener('change', applyLayerUI);
@@ -147,32 +120,32 @@ window.addEventListener('load', async () => {
   const gtTumor  = document.getElementById('gtTumor');
   const gtCyst   = document.getElementById('gtCyst');
   const gtCystNote = document.getElementById('gtCystNote');
-
   const predKidney = document.getElementById('predKidney');
   const predTumor  = document.getElementById('predTumor');
   const predCyst   = document.getElementById('predCyst');
   const predCystNote = document.getElementById('predCystNote');
 
-  function applyAllLabelVisibility() {
-    applyLabelLUT(idxGT, "warm",
+  function applyLabelToggles() {
+    applyLabelLUT(idxGT, true,
       gtKidney.checked ? ON : OFF,
       gtTumor.checked  ? ON : OFF,
       gtCyst.checked   ? ON : OFF
     );
-    applyLabelLUT(idxPred, "cool",
+    applyLabelLUT(idxPred, false,
       predKidney.checked ? ON : OFF,
       predTumor.checked  ? ON : OFF,
       predCyst.checked   ? ON : OFF
     );
   }
 
-  gtKidney.addEventListener('change', applyAllLabelVisibility);
-  gtTumor .addEventListener('change', applyAllLabelVisibility);
-  gtCyst  .addEventListener('change', applyAllLabelVisibility);
-  predKidney.addEventListener('change', applyAllLabelVisibility);
-  predTumor .addEventListener('change', applyAllLabelVisibility);
-  predCyst  .addEventListener('change', applyAllLabelVisibility);
+  gtKidney.addEventListener('change', applyLabelToggles);
+  gtTumor.addEventListener('change', applyLabelToggles);
+  gtCyst.addEventListener('change', applyLabelToggles);
+  predKidney.addEventListener('change', applyLabelToggles);
+  predTumor.addEventListener('change', applyLabelToggles);
+  predCyst.addEventListener('change', applyLabelToggles);
 
+  // optional: disable cyst if missing
   async function hasLabel(iVol, value) {
     const v = nv.volumes[iVol];
     if (!v) return false;
@@ -183,15 +156,9 @@ window.addEventListener('load', async () => {
   }
 
   (async () => {
-    if (idxGT >= 0) {
-      const exist3 = await hasLabel(idxGT, 3);
-      if (!exist3) { gtCyst.checked = false; gtCyst.disabled = true; gtCystNote.textContent = " (no cyst in GT)"; }
-    }
-    if (idxPred >= 0) {
-      const exist3 = await hasLabel(idxPred, 3);
-      if (!exist3) { predCyst.checked = false; predCyst.disabled = true; predCystNote.textContent = " (no cyst in Pred)"; }
-    }
-    applyAllLabelVisibility();
+    if (!await hasLabel(idxGT, 3)) { gtCyst.checked=false; gtCyst.disabled=true; gtCystNote.textContent="(no cyst in GT)"; }
+    if (!await hasLabel(idxPred, 3)) { predCyst.checked=false; predCyst.disabled=true; predCystNote.textContent="(no cyst in Pred)"; }
+    applyLabelToggles();
   })();
 });
 </script>
