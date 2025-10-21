@@ -76,16 +76,23 @@ window.addEventListener('load', async () => {
   let base = "./case_00003/";
   if (!base.endsWith("/")) base += "/";
 
-  // Use the new NIfTI files
-  const urlImg  = absUrl(base + "imaging_float32_lowres.nii");
-  const urlGT   = absUrl(base + "segmentation_labels_int.nii");
-  const urlPred = absUrl(base + "pred_labels_int.nii");
+  // cache-buster to bypass any stale cached pointer files
+  const bust = `?v=${Date.now()}`;
+
+  // Use the new NIfTI files with cache-busting
+  const urlImg  = absUrl(base + "imaging_float32_lowres.nii" + bust);
+  const urlGT   = absUrl(base + "segmentation_labels_int.nii" + bust);
+  const urlPred = absUrl(base + "pred_labels_int.nii" + bust);
   console.log("Resolved URLs:", { urlImg, urlGT, urlPred });
 
-  // Preflight small range to detect LFS pointer/HTML before handing to Niivue
+  // Preflight small range to detect LFS pointer/HTML before Niivue, no-store to avoid cache
   async function preflight(url) {
-    const res = await fetch(url, { method: 'GET', headers: { 'Range': 'bytes=0-127' } });
-    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: { 'Range': 'bytes=0-127' },
+      cache: 'no-store'
+    });
+    if (!res.ok && res.status !== 206) throw new Error(`HTTP ${res.status} ${res.statusText}`);
     const ct = (res.headers.get('Content-Type') || '').toLowerCase();
     const buf = await res.arrayBuffer();
     const txtHead = new TextDecoder().decode(new Uint8Array(buf));
