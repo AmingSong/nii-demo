@@ -116,28 +116,35 @@ window.addEventListener('load', async () => {
     };
   }
 
+  function refreshColorStuff() {
+    if (typeof nv.refreshColormaps === "function") nv.refreshColormaps();
+    else if (typeof nv.refreshLayers === "function") nv.refreshLayers();
+  }
+
   function applyLabelLUTStrict(volIndex, palette, a1, a2, a3) {
     const vol = nv.volumes[volIndex];
     if (!vol) return;
     const lut = palette === "warm" ? warmLUT(a1, a2, a3) : coolLUT(a1, a2, a3);
 
-    vol.isLabel = true;                    // enable label rendering
     if (typeof nv.setColormapLabel === "function") {
-      nv.setColormapLabel(vol.id, lut);    // preferred API (0.36.0 supports this)
+      nv.setColormapLabel(vol.id, lut);
     } else {
-      vol.colormapLabel = lut;             // fallback for older builds
+      vol.colormapLabel = lut;
       vol.colorMapLabel = lut;
     }
-    // Keep a valid colormap string; do NOT set null (avoids addColormapList(null) crash)
+
     if (!vol.colormap) {
       if (vol.name === "GT")   vol.colormap = "warm";
       if (vol.name === "Pred") vol.colormap = "cool";
     }
+
+    refreshColorStuff();
+    vol.isLabel = true;
   }
 
-  // initial LUTs (all labels visible)
   applyLabelLUTStrict(idxGT,   "warm", 160,160,160);
   applyLabelLUTStrict(idxPred, "cool", 160,160,160);
+  refreshColorStuff();
   nv.updateGLVolume();
 
   async function hasLabel(iVol, value) {
@@ -187,6 +194,7 @@ window.addEventListener('load', async () => {
       predTumor.checked  ? 160 : 0,
       predCyst.checked   ? 160 : 0
     );
+    refreshColorStuff();
     nv.updateGLVolume();
   }
 
